@@ -54,30 +54,37 @@ These are the cross-cutting skills every team benefits from. They encode *how In
 ### 1.2 Angular (company-wide UI standard)
 
 - **`angular-conventions`** — standalone components vs. modules, folder structure, state management approach, RxJS patterns, change-detection strategy, and styling conventions.
-- **`angular-indice-lib`** — how to consume [Indice.Angular](https://github.com/indice-co/Indice.Angular) components, directives, and services so teams reuse the shared UI layer instead of rebuilding it.
+- **`indice-angular-auth`** — the authentication side of [Indice.Angular](https://github.com/indice-co/Indice.Angular): `@indice/ng-auth` for OIDC login/logout, guards/interceptors, session state, and the `@indice/ng-config` hand-off when auth settings are environment-specific.
+- **`indice-angular-components`** — the reusable UI side of [Indice.Angular](https://github.com/indice-co/Indice.Angular): `@indice/ng-components`, shared layout/form primitives, Tailwind integration, and auth-aware components teams should prefer before building new UI.
 - **`angular-forms`** — reactive forms patterns, validation, and accessibility baseline.
 - **`angular-testing`** — component/service testing conventions and the tools we standardize on.
 
-### 1.3 Azure (company-wide cloud platform)
+> **Rule of thumb:** treat the Indice.Angular auth and components libraries as separate skills even though they live in one repo; most tasks need one side deeply, not the entire Angular stack.
 
-- **`azure-services`** — the services we default to (App Service / Container Apps, Azure SQL, Storage, Service Bus, Key Vault, App Configuration, Application Insights) and *when* to pick each.
-- **`azure-auth-identity`** — Managed Identity first, Key Vault for secrets, and how our identity stack (see [Indice.IdentityServer4](https://github.com/indice-co/Indice.IdentityServer4)) fits in.
-- **`azure-deployment`** — IaC approach (Bicep/Terraform), CI/CD pipeline conventions, environment/config strategy, and observability defaults.
-- **`azure-messaging`** — Service Bus / Event Grid patterns, idempotency, and retry/dead-letter conventions.
+### 1.3 DevOps (delivery and operations standard)
+
+#### Developer practices
+
+- **`devops-versioning`** — SemVer, release notes, package metadata, and branch/release conventions that make automation predictable.
+- **`devops-containerization`** — Dockerfile baseline, health probes, configuration injection, image hardening, and other choices that make services easy to build and operate.
+- **`devops-go-live-readiness`** — production configuration checklist, observability hooks, migrations/rollback planning, and hand-off expectations before a release goes live.
+
+#### DevOps practices
+
+- **`devops-azure-platform`** — Indice Azure defaults (App Service / Container Apps, Azure SQL, Storage, Service Bus, Key Vault, App Configuration, Application Insights) and *when* to pick each.
+- **`devops-delivery-pipelines`** — GitHub Actions flow, build/test/package/release stages, environment promotion, approvals, and artifact handling.
+- **`devops-identity-secrets`** — Managed Identity first, Key Vault for secrets, least-privilege access, and how deployed applications integrate with our identity infrastructure.
+- **`devops-observability-messaging`** — telemetry, dashboards, alerts, and the runtime conventions for Service Bus / Event Grid workloads (retries, idempotency, dead-letter handling).
 
 ### 1.4 Indice libraries — "don't re-invent the wheel"
 
-This is the highest-value category. Each skill should tell the agent **what the library does, when to reach for it, how to install it, and a minimal usage example**, plus a link so it can read deeper. Source: [https://github.com/indice-co](https://github.com/indice-co).
+This is the highest-value category. Each skill should tell the agent **what the library does, when to reach for it, how to install it, and a minimal usage example**, plus a link so it can read deeper. Start with the three main Indice library families below, then use the [library lookup](docs/indice-libraries.md) to author focused skills under each family.
 
-| Skill                             | Library                                                                      | Use it for                                                                                                                |
-| --------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **`indice-platform`**     | [Indice.Platform](https://github.com/indice-co/Indice.Platform)               | Platform add-ons and building blocks (features, primitives, cross-cutting helpers) — check here first for backend needs. |
-| **`indice-angular`**      | [Indice.Angular](https://github.com/indice-co/Indice.Angular)                 | Shared Angular components, directives, and services for Indice UIs.                                                       |
-| **`indice-identity`**     | [Indice.IdentityServer4](https://github.com/indice-co/Indice.IdentityServer4) | Identity Server / auth for modern .NET.                                                                                   |
-| **`indice-cryptography`** | [Indice.Cryptography](https://github.com/indice-co/Indice.Cryptography)       | PSD2 starter kit and cryptography utilities.                                                                              |
-| **`edi-net`**             | [EDI.Net](https://github.com/indice-co/EDI.Net)                               | EDIFACT / X12 / TRADACOMS serialization and deserialization.                                                              |
-| **`incontrl-net`**        | [Incontrl.Net](https://github.com/indice-co/Incontrl.Net)                     | .NET client for the incontrl.io REST API.                                                                                 |
-| **`elsa-workflows`**      | [elsa-core](https://github.com/indice-co/elsa-core)                           | Workflow engine for .NET.                                                                                                 |
+| Skill family               | Library                                                                | Use it for                                                                                                                                                  |
+| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`indice-platform-*`**    | [Indice.Platform](https://github.com/indice-co/Indice.Platform)        | The main Indice backend monorepo: foundational ASP.NET/Core helpers plus feature packs for identity, messaging, agents, cases, risk, and multitenancy. Author focused skills per slice, not one giant catch-all skill. |
+| **`indice-angular-*`**     | [Indice.Angular](https://github.com/indice-co/Indice.Angular)          | Shared Angular auth and component libraries for Indice UIs. Split this family into at least `auth` and `components`, then add narrower skills only when needed. |
+| **`indice-cryptography-*`**| [Indice.Cryptography](https://github.com/indice-co/Indice.Cryptography)| PSD2-focused cryptography, X.509 certificate management, and HTTP message signing for secure integrations. Start with one skill, then split further only if the library surface becomes too broad. |
 
 > **Guardrail to embed in these skills:** *"Before proposing a new implementation, search the relevant Indice library for existing functionality. Only write new code if nothing suitable exists, and say which library you checked."*
 
@@ -87,6 +94,12 @@ This is the highest-value category. Each skill should tell the agent **what the 
 - **`security-owasp`** — OWASP Top 10 baseline, secrets handling, and input validation expectations.
 - **`git-conventions`** — branch naming, commit message format, and PR description template.
 - **`documentation`** — how we write READMEs, ADRs, and inline docs.
+
+### 1.6 Other languages
+
+- **`mobile-swift`** — iOS conventions, package/dependency setup, secure storage, and how native Swift apps integrate with Indice authentication and backend APIs.
+- **`mobile-kotlin`** — Android conventions, Gradle/module structure, secure storage, and how Kotlin apps consume the same identity and API surface.
+- Keep these lighter than the .NET and Angular catalogs until a mobile product needs deeper project-specific skills.
 
 ---
 
@@ -106,7 +119,7 @@ A large amount of high-quality, ready-made skill content already exists — most
 
 ### What we still own (can't be imported)
 
-- **Indice library skills** (`indice-platform`, `indice-angular`, `edi-net`, …) — nobody else has these; this is the "don't re-invent the wheel" payoff.
+- **Indice library skills** (`indice-platform-*`, `indice-angular-*`, `indice-cryptography-*`, …) — nobody else has these; this is the "don't re-invent the wheel" payoff.
 - **Angular conventions** — external coverage is thin, and we have our own `Indice.Angular` lib, so we write this ourselves.
 - **Project / business skills** — domain knowledge, by definition, can only come from us.
 
@@ -138,10 +151,12 @@ Indice.Skills/
 │  │  └─ SKILL.md
 │  ├─ angular-conventions/
 │  │  └─ SKILL.md
-│  ├─ azure-services/
+│  ├─ devops-azure-platform/
 │  │  └─ SKILL.md
 │  └─ indice-platform/
 │     └─ SKILL.md
+├─ docs/
+│  └─ indice-libraries.md
 ├─ instructions/
 │  ├─ dotnet.instructions.md         # applyTo: "**/*.cs"
 │  └─ angular.instructions.md        # applyTo: "**/*.ts"
@@ -154,25 +169,22 @@ Indice.Skills/
 └─ CONTRIBUTING.md
 ```
 
-### 2.2 Distribution options (pick per team, layer as needed)
+### 2.2 Distribution options (favor packaged artifacts)
 
-- **Git submodule / subtree.** Each product repo references `Indice.Skills` and checks out the skills it needs into its agent-config folder. Simple, version-pinned, works offline.
-- **Package the skill set.** Publish a versioned artifact (npm and/or NuGet, on the Indice GitHub Packages feed) that drops skills into the expected location during setup. Good for reproducible, pinned rollouts.
-- **Symlink / sync script.** A small `sync-skills` script copies the chosen skills into the consuming repo's tool-specific directory (for example the agent config folder that the developer's tool reads). Good when a tool expects files in a fixed path.
-- **Central + local override.** Consume common skills from here, and let each repo add its own project skills locally (see Topic 3). The agent sees the union of both.
+- **Marketplace / plugin artifact.** Publish the skill set to the target agent marketplace when the host supports it, so teams install a pinned version instead of copying files around.
+- **NuGet package artifact.** Publish a versioned package that drops skills into the expected tool directory during setup or build-agent provisioning. Good when our .NET-heavy repos already bootstrap from NuGet.
+- **Central + local override.** Consume common skills as an artifact from here, and let each repo add its own project skills locally (see Topic 3). The agent sees the union of both.
+- **Vendored snapshot (exception path).** If a tool cannot consume packaged artifacts yet, vendor a pinned snapshot into the repo as a temporary fallback rather than relying on long-lived sync scripts.
 
-> **Recommendation:** start with a **submodule or a sync script** (zero infrastructure), then graduate to a **published package** once the catalog stabilizes and you want pinned versions per product.
+> **Recommendation:** distribute the catalog as a **versioned artifact** — preferably through a marketplace/plugin install, otherwise via **NuGet**. Use vendored snapshots only when the target tool has no package-based option yet.
 
 ### 2.3 Versioning
 
-- Version the whole set with **SemVer** and tag releases. Consuming repos pin to a tag/commit so an agent's behavior doesn't change under teams unexpectedly.
+- Version the whole set with **SemVer** and tag releases. Consuming repos pin to a tag/version so an agent's behavior doesn't change under teams unexpectedly.
 - Keep a short **`CHANGELOG.md`** so teams can see what changed before they bump.
 
 ### 2.4 Maintenance & governance
 
-- **Ownership.** Assign an owner (a person or a small guild) per skill domain — .NET, Angular, Azure, and the Indice libraries. Use `CODEOWNERS` so changes route to the right reviewers.
-- **Contribution flow.** Changes come as PRs against this repo. Every PR updates the skill's front-matter description and, where relevant, the `CHANGELOG`.
-- **Review bar.** A skill is only merged if it is (a) accurate, (b) concise — skills are read by the model, so brevity saves tokens, and (c) non-overlapping with an existing skill.
 - **Freshness.** Review skills on a cadence (for example quarterly) and whenever a referenced library releases a breaking change. Stale guidance is worse than no guidance because the agent will follow it confidently.
 - **Feedback loop.** Give developers an easy way to flag a skill that produced a bad result (an issue template), so real usage drives improvements.
 
@@ -271,7 +283,7 @@ That is the entire point of this repository: **the agent behaves like an Indice 
 ## Getting started
 
 1. Browse `common/` to see the shared skills available.
-2. In your product repo, consume the common skills (submodule / package / sync script — see Topic 2.2).
+2. In your product repo, install or restore the common skills from the published marketplace/plugin artifact or NuGet package (see Topic 2.2).
 3. Create your **project skills** from `templates/SKILL.template.md` and commit them alongside your code.
 4. Propose improvements to common skills via PR — everyone benefits.
 
