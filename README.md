@@ -54,12 +54,8 @@ These are the cross-cutting skills every team benefits from. They encode *how In
 ### 1.2 Angular (company-wide UI standard)
 
 - **`angular-conventions`** — standalone components vs. modules, folder structure, state management approach, RxJS patterns, change-detection strategy, and styling conventions.
-- **`indice-angular-auth`** — the authentication side of [Indice.Angular](https://github.com/indice-co/Indice.Angular): `@indice/ng-auth` for OIDC login/logout, guards/interceptors, session state, and the `@indice/ng-config` hand-off when auth settings are environment-specific.
-- **`indice-angular-components`** — the reusable UI side of [Indice.Angular](https://github.com/indice-co/Indice.Angular): `@indice/ng-components`, shared layout/form primitives, Tailwind integration, and auth-aware components teams should prefer before building new UI.
 - **`angular-forms`** — reactive forms patterns, validation, and accessibility baseline.
 - **`angular-testing`** — component/service testing conventions and the tools we standardize on.
-
-> **Rule of thumb:** treat the Indice.Angular auth and components libraries as separate skills even though they live in one repo; most tasks need one side deeply, not the entire Angular stack.
 
 ### 1.3 DevOps (delivery and operations standard)
 
@@ -78,13 +74,25 @@ These are the cross-cutting skills every team benefits from. They encode *how In
 
 ### 1.4 Indice libraries — "don't re-invent the wheel"
 
-This is the highest-value category. Each skill should tell the agent **what the library does, when to reach for it, how to install it, and a minimal usage example**, plus a link so it can read deeper. Start with the three main Indice library families below, then use the [library lookup](docs/indice-libraries.md) to author focused skills under each family.
+This is the highest-value category. Each skill should tell the agent **what the library does, when to reach for it, how to install it, and a minimal usage example**, plus a link so it can read deeper. These are the concrete Indice library skills we should implement first.
 
-| Skill family               | Library                                                                | Use it for                                                                                                                                                  |
-| -------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`indice-platform-*`**    | [Indice.Platform](https://github.com/indice-co/Indice.Platform)        | The main Indice backend monorepo: foundational ASP.NET/Core helpers plus feature packs for identity, messaging, agents, cases, risk, and multitenancy. Author focused skills per slice, not one giant catch-all skill. |
-| **`indice-angular-*`**     | [Indice.Angular](https://github.com/indice-co/Indice.Angular)          | Shared Angular auth and component libraries for Indice UIs. Split this family into at least `auth` and `components`, then add narrower skills only when needed. |
-| **`indice-cryptography-*`**| [Indice.Cryptography](https://github.com/indice-co/Indice.Cryptography)| PSD2-focused cryptography, X.509 certificate management, and HTTP message signing for secure integrations. Start with one skill, then split further only if the library surface becomes too broad. |
+#### 1.4.1 Indice.Platform
+
+- **`indice-platform-core`** — foundational backend packages such as `Indice.Common`, `Indice.AspNetCore`, `Indice.EntityFrameworkCore`, `Indice.Hosting`, `Indice.Services`, and `Indice.Functions.Builder`. Use when building shared ASP.NET/Core infrastructure or cross-cutting primitives.
+- **`indice-platform-identity`** — the identity/authentication slice (`Indice.Features.Identity.*`, activity/sign-in logging, Apple and GovGR auth providers). Use when working on sign-in, admin UI, end-user identity UI, or identity server extensions.
+- **`indice-platform-messaging`** — the messaging slice (`Indice.Features.Messages.*`, workers, and Azure worker integrations). Use when a product sends campaigns, notifications, or background-delivered messages.
+- **`indice-platform-agents-and-cases`** — the agents and case-management slice (`Indice.Features.Agents.*`, `Indice.Features.Cases.*`, `Indice.Features.Cases.Workflows`). Use when workflows, operational back-office cases, or AI-agent orchestration are in scope.
+- **`indice-platform-risk-and-multitenancy`** — the risk, multitenancy, and related platform features (`Indice.Features.Risk.*`, `Indice.Features.Multitenancy.*`, plus adjacent feature packs such as media and government integrations when they appear in the same solution). Use when tenant isolation, fraud/risk scoring, or supporting feature modules shape the design.
+
+#### 1.4.2 Indice.Angular
+
+- **`indice-angular-auth`** — `@indice/ng-auth` for OIDC login/logout, guards/interceptors, session-aware Angular features, and the `@indice/ng-config` hand-off when auth settings are environment-specific.
+- **`indice-angular-components`** — `@indice/ng-components` for reusable UI, Tailwind integration, shared layout/form building blocks, and auth-aware components.
+
+#### 1.4.3 Indice.Cryptography
+
+- **`indice-cryptography`** — the broad library skill for PSD2 compliance, certificate management, ASN.1/X.509 work, and cryptographic primitives.
+- **`indice-cryptography-http-signing`** — HTTP message signing, request integrity, and certificate-backed API authentication when integrations need that protocol in detail.
 
 > **Guardrail to embed in these skills:** *"Before proposing a new implementation, search the relevant Indice library for existing functionality. Only write new code if nothing suitable exists, and say which library you checked."*
 
@@ -119,7 +127,7 @@ A large amount of high-quality, ready-made skill content already exists — most
 
 ### What we still own (can't be imported)
 
-- **Indice library skills** (`indice-platform-*`, `indice-angular-*`, `indice-cryptography-*`, …) — nobody else has these; this is the "don't re-invent the wheel" payoff.
+- **Indice library skills** (`indice-platform-core`, `indice-platform-identity`, `indice-angular-auth`, `indice-angular-components`, `indice-cryptography`, …) — nobody else has these; this is the "don't re-invent the wheel" payoff.
 - **Angular conventions** — external coverage is thin, and we have our own `Indice.Angular` lib, so we write this ourselves.
 - **Project / business skills** — domain knowledge, by definition, can only come from us.
 
@@ -153,10 +161,12 @@ Indice.Skills/
 │  │  └─ SKILL.md
 │  ├─ devops-azure-platform/
 │  │  └─ SKILL.md
-│  └─ indice-platform/
+│  ├─ indice-platform-core/
+│  │  └─ SKILL.md
+│  ├─ indice-angular-auth/
+│  │  └─ SKILL.md
+│  └─ indice-cryptography/
 │     └─ SKILL.md
-├─ docs/
-│  └─ indice-libraries.md
 ├─ instructions/
 │  ├─ dotnet.instructions.md         # applyTo: "**/*.cs"
 │  └─ angular.instructions.md        # applyTo: "**/*.ts"
