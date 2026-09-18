@@ -1,0 +1,7 @@
+# Route skill changes to the owner of each domain. Replace the placeholders with real GitHub handles or teams.
+/common/dotnet-*/        @indice-co/TODO-dotnet-owners
+/common/angular-*/       @indice-co/TODO-angular-owners
+/common/azure-*/         @indice-co/TODO-azure-owners
+/common/indice-*/        @indice-co/TODO-library-owners
+/instructions/           @indice-co/TODO-dotnet-owners @indice-co/TODO-angular-owners
+/templates/              @indice-co/TODO-library-owners
