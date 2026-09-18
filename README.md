@@ -78,7 +78,8 @@ This is the highest-value category. Each skill should tell the agent **what the 
 
 #### 1.4.1 Indice.Platform
 
-- **`indice-platform-core`** — foundational backend packages such as `Indice.Common`, `Indice.AspNetCore`, `Indice.EntityFrameworkCore`, `Indice.Hosting`, `Indice.Services`, and `Indice.Functions.Builder`. Use when building shared ASP.NET/Core infrastructure or cross-cutting primitives.
+- **`indice-platform-core`** — foundational backend packages such as `Indice.Common`, `Indice.AspNetCore`, `Indice.AspNetCore.Builder`, `Indice.EntityFrameworkCore`, `Indice.Services`, and `Indice.Functions.Builder`. Use when building shared ASP.NET/Core infrastructure or cross-cutting primitives such as authentication defaults, HTTP client resiliency, OpenTelemetry, and JSON serialization.
+- **`indice-platform-hosting`** — `Indice.Hosting` for Quartz-based distributed worker task hosting triggered by queues or schedules, including patterns such as the Outbox. Use when a solution needs scheduled/background execution infrastructure instead of ad hoc hosted services.
 - **`indice-platform-identity`** — the identity/authentication slice (`Indice.Features.Identity.*`, activity/sign-in logging, Apple and GovGR auth providers). Use when working on sign-in, admin UI, end-user identity UI, or identity server extensions.
 - **`indice-platform-messaging`** — the messaging slice (`Indice.Features.Messages.*`, workers, and Azure worker integrations). Use when a product sends campaigns, notifications, or background-delivered messages.
 - **`indice-platform-agents-and-cases`** — the agents and case-management slice (`Indice.Features.Agents.*`, `Indice.Features.Cases.*`, `Indice.Features.Cases.Workflows`). Use when workflows, operational back-office cases, or AI-agent orchestration are in scope.
@@ -87,6 +88,7 @@ This is the highest-value category. Each skill should tell the agent **what the 
 #### 1.4.2 Indice.Angular
 
 - **`indice-angular-auth`** — `@indice/ng-auth` for OIDC login/logout, guards/interceptors, session-aware Angular features, and the `@indice/ng-config` hand-off when auth settings are environment-specific.
+- **`indice-angular-config`** — `@indice/ng-config` for loading client-side configuration over HTTP into prebuilt Angular SPA bundles at runtime, so the same deployed artifact can stay environment-configurable without rebuilds.
 - **`indice-angular-components`** — `@indice/ng-components` for reusable UI, Tailwind integration, shared layout/form building blocks, and auth-aware components.
 
 #### 1.4.3 Indice.Cryptography
