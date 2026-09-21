@@ -129,6 +129,9 @@ be visible.
 | 2026-09-21 | same                  | 03                             | 8/8 hits, 1 FP | 8/8 hits, 1 FP    | Sub-agent model **claude-opus-5**. Both arms caught all 8 seeded violations this time (opus-5 baseline is markedly stronger than sonnet-5's baseline here). Each added one false positive of its own — see "2026-09-21 re-run, claude-opus-5" below. A tie on this task at this model tier.                           |
 | 2026-09-21 | 266-line rev          | 01                             | **24/24**      | **24/24**         | rubric.md, profile=library. Identical.                                                                                                                                                                                                                               |
 | 2026-09-21 | 266-line rev          | 02                             | **19/21**      | **21/21**         | rubric.md, profile=product. A failed 12 (new file, not split) and 22 (`WithSummary` 0/2). Drift D1: A copied, B followed.                                                                                                                                                                                             |
+| 2026-09-21b | c677a58, collection rule settled | 01 | **25/25** | **25/25** | `score.py --profile library`. Sub-agent model **claude-opus-5**. Skill rev now inverts check 6: `ResultSet<Campaign>` on the campaigns-per-tag endpoint is correct, not a bounded-`List<T>` exception. Both arms produced it; identical structurally to every prior task-01 run. See "2026-09-21b re-run" below. |
+| 2026-09-21b | same | 02 | **20/21** | **21/21** | `score.py --profile product`, EVPulse `2c05e62d`. Sub-agent model **claude-opus-5**. Only gap: `WithSummary` (A 0/2, B 2/2) — the same single gap every run of this task has found, on every skill rev, every model. |
+| 2026-09-21b | same | 03 | 8/8 hits, 0 FP | 8/8 hits, 1 FP | Scored by hand (task 3 has no `.cs` output for `score.py` to read). Sub-agent model **claude-opus-5**. Baseline caught all 8 unaided and added no false positive this time. Skill arm also caught all 8 but repeated the recurring `RouteGroupBuilder`-return false positive (present in the 2026-09-18 and prior opus-5 runs too). |
 
 **Denominators differ by instrument and are not interchangeable.** The `/17` and `/25` rows
 were scored against a hand-selected applicable set; the `/21` and `/24` rows against
@@ -348,6 +351,99 @@ in particular. **This is one data point per cell, on one day; it is not a claim 
 opus-5 is cheaper or more expensive than sonnet-5 in general**, only a record of what this
 specific harness run cost.
 
+### 2026-09-21b re-run: skill rev `c677a58`, all three tasks, `score.py`
+
+A teammate pushed `c677a58` ("Settle the collection rule and make eval runs reproducible")
+the same day, which changed three things worth separating from every row above: the
+collection rule (§ "Collections" in `SKILL.md`) now says `ResultSet<T>` is the default for
+*any* collection that can grow, including a child of one parent — the old rule's
+`List<T>`-for-bounded-sub-collections exception is gone, and rubric check 6 is inverted to
+match; `score.py` replaced hand-scoring for tasks 01/02, deriving the applicable set from
+`--profile library|product` and printing `PASS`/`FAIL`/`REVIEW`/`NA` per check; and run
+outputs now live under `evals/indice-web-api/runs/` (gitignored) instead of an external
+scratch directory. Repeated all three tasks again, sub-agent model **claude-opus-5**,
+against `Indice.Platform` @ `1b9e0e8e` and a fresh `EVPulse` @ `2c05e62d` (one unrelated,
+pre-existing local modification — a dev-only `app-settings.manifest.json` authority URL —
+was stashed before the run and restored after; it was not part of any arm's diff). Both
+repos verified clean before and after with `git status --porcelain`. All six sign-off
+answers matched expectations: both task-01 baselines and the task-02/03 baselines said
+**no** consultation outside their target repo; all three skill arms said **yes**,
+`SKILL.md` only.
+
+Two of the six sub-agent calls (task 01 baseline, task 01 skill) and one more (task 03
+baseline) hit a mid-run quota error and had to be restarted; the restarted agents picked up
+any partial output already on disk in their own scratch directory and finished from there.
+Token/call totals below sum **both** the failed attempt and the completed retry for those
+three, since both legitimately spent tokens getting to the final artifact — the wall-clock
+column reports only the completed attempt's own elapsed time, since the failed attempt's
+duration before erroring was not captured.
+
+**Task 01 (message tags).** `score.py --profile library` on both arms: every check
+auto-decided `PASS` except three genuine judgement calls (3, 12, 28) plus check
+5/6/9/10/13, all resolved by reading the diff. Handlers are thin in both arms (no
+`DbContext`, no LINQ, everything delegates to `IMessageTagService`), the list endpoint
+returns `Ok<ResultSet<MessageTag>>`, and — the point of this re-run — **both arms now
+correctly return `Ok<ResultSet<Campaign>>`, not `List<Campaign>`, for the campaigns-by-tag
+endpoint**, matching the settled rule. Score: **25/25 both arms.** Structurally the two
+outputs are close to identical again (same route shape, same `IOptions` prefix, same
+`WithHandledException<BusinessException>`), reproducing the "consistent codebase teaches
+its own conventions" finding from every prior task-01 run regardless of skill, rev, or
+model.
+
+**Task 02 (EVPulse RFID cards).** `score.py --profile product`: baseline created a new
+single-file `UsersRfidCardsEndpoints.cs` matching the established local shape of every
+other users sub-group (`UsersPaymentsEndpoints.cs`, `UsersReportsEndpoints.cs` — none of
+which are split in this product), used `ResultSet<RfidCard>`, `nameof`, and kept the
+ownership/already-deactivated checks in the assumed service layer, not the handler — a
+correct call this run, unlike the sonnet-5 baseline eight days earlier. Skill arm split
+into `UsersRfidCardsApi.cs` + `UsersRfidCardsHandlers.cs` and added `.WithSummary(...)` on
+both endpoints. The only rubric gap, on either arm, is `WithSummary`: baseline 0/2, skill
+2/2 — the single finding every run of this task has produced, unchanged since 2026-09-18.
+Score: **baseline 20/21, skill arm 21/21** (`score.py`'s applicable set for this task
+profile, resolving all `REVIEW` checks by hand).
+
+**Task 03 (review).** Hand-scored per `rubric.md`'s "Task 3 scoring" (score.py has no
+`.cs` output to read for a review task). Baseline caught all 8 seeded violations —
+including the `DbContext`/LINQ-in-handler call and the kebab-case naming call that the
+sonnet-5 baseline missed on 2026-09-21 — and, unlike the first opus-5 run three hours
+earlier, added **zero** false positives this time: no invented `.Server`-naming claim.
+Skill arm also caught all 8, but repeated the one false positive that has now appeared in
+three separate runs of this task (2026-09-18, opus-5 run 1, and this run): asserting
+`MapWidgets` must return `RouteGroupBuilder`, a claim the task file itself says is false
+(the reference library is split roughly evenly between both return types). Score:
+**baseline 8/8 hits, 0 FP — skill arm 8/8 hits, 1 FP.** This reverses the "tie" result from
+the same-day-earlier opus-5 run: this time the baseline is strictly cleaner than the skill
+arm on precision, because the recurring false positive is attached to the skill's own
+content, not to model variance — a stronger baseline avoiding an invented claim it was
+never told to make, while the skill-primed arm repeats a claim the skill's own reference
+implementation contradicts.
+
+**Token/call/wall-clock** (measured the same way as every other 2026-09-21 row: summed
+`input_tokens + output_tokens` per agent from the runtime's usage log, `model=claude-opus-5`
+confirmed for every call):
+
+| Task | Arm      | LLM calls | Total tok | Wall clock | Note                      |
+| ---- | -------- | --------- | --------- | ---------- | -------------------------- |
+| 01   | Baseline | 51        | 2,383,054 | 279s       | sums a failed attempt (20 calls, 887,731 tok) + the completed retry |
+| 01   | Skill    | 49        | 2,380,734 | 159s       | sums a failed attempt (26 calls, 1,245,960 tok) + the completed retry |
+| 02   | Baseline | 27        | 1,195,798 | 152s       | completed on the first attempt |
+| 02   | Skill    | 23        | 1,198,569 | 151s       | completed on the first attempt |
+| 03   | Baseline | 19        | 613,463   | 84s        | sums a failed attempt (10 calls, 334,018 tok) + the completed retry |
+| 03   | Skill    | 6         | 172,238   | 58s        | completed on the first attempt |
+
+Task 01 is now a near-exact tie on tokens (2.383M vs 2.381M) and close on calls (51 vs 49)
+— both figures inflated by the same failed-attempt-plus-retry pattern on both arms, so the
+totals are not a clean read on relative cost this time; discount this row more than the
+others. Task 02 skill arm used marginally *more* tokens than baseline (1.199M vs 1.196M)
+despite fewer calls (23 vs 27) — shorter search, longer individual turns, netting out
+close to even; wall clock is a near tie (151s vs 152s). Task 03 is the one clean
+comparison, unaffected by any retry: skill arm cheaper on every measure (6 calls vs 19,
+172k tokens vs 613k, 58s vs 84s) while being the one place its score was strictly worse (1
+FP). **The retried-attempt totals on tasks 01 and 03-baseline are a real accounting choice,
+not noise to be corrected out**: those tokens were actually spent reaching the artifact
+that was scored, so excluding them would understate what this run cost, even though a
+quota interruption is not something either arm's design caused.
+
 ### Cost
 
 | Run                      | Baseline                        | With skill          |
@@ -356,6 +452,15 @@ specific harness run cost.
 | 02                       | 85,219 / 26 / 179s              | 95,245 / 32 / 230s  |
 | 03                       | 66,597 / 15 / 125s              | 58,994 / 5 / 82s    |
 | 02 (2026-09-21, EVPulse) | 1,473,319 tok / 29 calls / 444s | 482,700 / 10 / 117s |
+
+**2026-09-21b (skill rev `c677a58`, sub-agent claude-opus-5, includes retried-attempt
+tokens on 3 of 6 cells — see the run's own section above for which):**
+
+| Task | Baseline                     | With skill                   |
+| ---- | ----------------------------- | ----------------------------- |
+| 01   | 2,383,054 tok / 51 calls / 279s | 2,380,734 / 49 / 159s        |
+| 02   | 1,195,798 / 27 / 152s          | 1,198,569 / 23 / 151s         |
+| 03   | 613,463 / 19 / 84s             | 172,238 / 6 / 58s             |
 
 Rows from different hosts do not compare; see "Comparing runs" above. Within the
 2026-09-18 host: cheaper with the skill on two runs, dearer on one, and on task 02 dearer
@@ -505,6 +610,22 @@ run were on the same model. The task-02 and task-03 findings are the ones worth 
 first, because they are the only ones where a mechanism is visible rather than just a
 number: the sibling code demonstrably cannot supply either answer, and the skill visibly
 does.
+
+**The 2026-09-21b re-run (`c677a58`, opus-5, n=3) is now the third independent measurement
+and holds the same shape as the first two.** Task 01: tied again, now 25/25 both arms under
+the settled collection rule (the earlier 24/25 and 25/25 splits were an artefact of the old
+rule's ambiguity on the campaigns-per-tag endpoint, not a real difference — see the rev's
+commit message). Task 02: same single `WithSummary` gap it has found on every rev, every
+model, every day this task has been run — the most reproducible single finding in the whole
+harness. Task 03: baseline hit 8/8 with **no** false positive this time (better than the
+same-day-earlier opus-5 run, where it invented a project-naming claim), while the skill arm
+repeated its own recurring false positive for the third time across three separate runs —
+the one place in the harness where a specific defect is attributable to the skill's content
+rather than to model variance, and worth fixing in `SKILL.md` directly rather than re-running
+around. Token/call totals on two of three tasks this run include a failed, quota-interrupted
+attempt summed with its retry (flagged per-cell above); treat those two rows as noisier than
+usual, and treat task 03's clean numbers (no retry on either arm) as the more trustworthy cost
+comparison from this run.
 
 ## Reading the result
 
