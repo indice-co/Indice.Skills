@@ -1,60 +1,82 @@
-# Task 02: Add an endpoint to a product API
+# Task 02: Add endpoints to a product API
 
-**Target:** `EVPulse`, `src/EVPulse.Api/Endpoints/Management`
-**Applicable rubric sections:** Return types, Structure, Product API, Metadata, Routing
-**Not applicable:** Feature library section (14–17)
+**Target:** any product API built on Indice.Platform. Instantiate this against the one you work on.
+**Applicable rubric sections:** Return types, Structure, Product API, Metadata, Routing, plus the drift checks
+**Not applicable:** Feature library section (14 to 17)
 
----
-
-Paste verbatim into a fresh session.
-
----
-
-In the EVPulse management API, add two endpoints to the existing users area:
-
-1. A paged, searchable list of a user's RFID cards.
-2. An endpoint that deactivates one of those cards, taking a short reason string
-   in the body. It should fail cleanly if the card doesn't belong to that user,
-   or if it is already deactivated.
-
-Both should require the same permission as the other card and wallet operations
-on a user, and appear in the management OpenAPI document.
-
-Assume the repository and service methods you need exist; call them.
+This is the task that distinguishes the skill from the codebase, so it is the one
+worth running everywhere. Tasks 01 and 03 exercise a clean reference library and
+will look much the same in any product. This one does not: its result depends on
+how far your product has drifted, which is different in each.
 
 ---
 
-## What this task is probing
+## Instantiating it
 
-The inverse of task 01. Here the target file is itself non-conforming, so the task
-separates two different things: the conventions that hold everywhere, and the
-judgement about how far to go when the surrounding code is drifted.
+**1. Pick the target.** An endpoint area that already exists and already has
+siblings: a resource group with several routes on it, ideally one where list and
+mutation endpoints already live. Do not pick a greenfield area; the point is to
+see what the agent copies.
 
-Conventions that still apply (the skill says Platform is the standard in a product
-API too):
+**2. Measure the control first**, before running either arm:
 
-- `ResultSet<T>` on the list endpoint. EVPulse is roughly 50/50 between `ResultSet<T>`
-  and a bare `List<T>`, so the surrounding code will not settle it. Check 5, drift D4.
-- `.WithName(nameof(...))`, `.WithSummary(...)`, a typed `Results<...>` union,
-  no logic in the handler. Checks 21, 22, 3, 9.
+```
+./score.py <path to that endpoint folder> --control --label "CONTROL: <product> <area>"
+```
 
-Genuinely context-dependent (checks 18 to 20):
+Read the raw counts, not the verdicts. They tell you what an agent imitating its
+neighbours would produce. The skill can only beat imitation on lines where the
+control is already wrong, so the control predicts which rubric lines can move at
+all. Record it beside your results; **it is not transferable between products.**
 
-- A **literal** group prefix. No invented `IOptions` plumbing for a single consumer.
-- `.RequireV2Permission(...)` copied from the sibling routes.
-- Errors must match the group. The existing users group has no
-  `.WithHandledException<BusinessException>()`, so a handler that throws one returns a
-  500 with no error code. The correct answer is to unpack `ServiceResult` like its
-  siblings, not to start converting the group.
+**3. Write the task.** Two endpoints, phrased in your product's own domain terms:
 
-The judgement call (drift D1): one endpoint added to an existing single-file group
-should stay in that file. An agent that creates a lone `*Handlers.cs` next to a
-1000-line sibling has followed the letter of the split rule and made the codebase
-worse. An agent that notes the file is a split candidate without acting on it has read
-the skill properly.
+- one **paged, searchable list** scoped to a parent entity
+- one **mutation** that must fail cleanly in two distinct ways
 
-Check 25 and drift D5 are the subtlest line here. The request DTO will carry
-DataAnnotations, and `WithParameterValidation` activates them through the MiniValidator
-fallback. An agent that knows the helper but not the fallback adds a FluentValidation
-validator on top, which silently stops the annotations running. That failure is
-invisible at runtime, which is exactly why it is worth measuring.
+Say that both must carry the same permission as the neighbouring operations and
+appear in the same OpenAPI document. End with: *"Assume the repository and service
+methods you need exist; call them."* That keeps the run about endpoint shape
+rather than persistence.
+
+**4. Run both arms** per the top-level README, in fresh sessions, output to a
+scratch directory rather than the repo.
+
+## What to watch for
+
+The three **context-dependent** checks (18 to 20). These are where a skill can do
+damage by over-generalising, so a correct answer here matters as much as the
+universal checks:
+
+- the group prefix should stay a **literal**; no `IOptions` plumbing invented for
+  a single consumer
+- the product's **own permission helper**, applied the way sibling routes apply it
+- errors must **match the group**. If the group has no
+  `.WithHandledException<BusinessException>()`, a handler that throws one returns a
+  500 with no error code. The correct answer is to match the surrounding idiom and
+  flag the group as a conversion candidate, not to convert one handler.
+
+Then the **drift checks** (D1 to D5). Score each as *followed Platform* / *copied
+the drift* / *n/a*. Copying drift is not a failure where the skill says to match
+the file; count it anyway, because the ratio across products is the interesting
+number.
+
+Two lines are worth particular attention because they are invisible at runtime:
+
+- **D5 / check 25.** If your request DTOs carry DataAnnotations and the project
+  registers no FluentValidation validators, `WithParameterValidation<T>` is
+  working through the MiniValidator fallback. An agent that knows the helper but
+  not the fallback adds a validator on top, giving one request two validation
+  layers and silently stopping the annotations.
+- **Check 22.** Whether `.WithSummary(...)` appears. If your control shows few or
+  none, this is a line imitation cannot supply, so it is a clean read on whether
+  the skill contributed anything.
+
+## Reference instantiation
+
+Run on 2026-09-18 against EVPulse, management API, users area. Control: 56 files,
+341 endpoints, `WithSummary` 0, untyped `Results.*` 19, `IResult` 14, bare
+`Ok<List<...>>` 35 against 48 `ResultSet<T>`, `WithName("literal")` 9 against 329
+`nameof`. Task: list a user's RFID cards (paged, searchable); deactivate one with
+a reason in the body, failing if the card is not that user's or is already
+deactivated. See the results table in the README.

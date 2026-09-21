@@ -15,7 +15,7 @@ Score = passed / (applicable).
 | 3   | Multi-outcome handlers annotated `Task<Results<…>>`                        | Read each handler with more than one exit        |
 | 4   | Created response uses `CreatedAtRoute` with `nameof`, not a hand-built URL | grep `CreatedAtRoute` vs `TypedResults.Created(` |
 | 5   | Search/list endpoint taking `ListOptions` returns `ResultSet<T>`           | Read the list handler                            |
-| 6   | Bounded sub-collection returns `List<T>`, not `ResultSet<T>`               | Only applies if the task has one                 |
+| 6   | No `List<T>` returned from a collection that can grow; `ResultSet<T>` is the default and `List<T>` needs a fixed-by-definition set to justify it | Read each collection return. `n/a` if the task has only one collection endpoint, already covered by check 5 |
 | 7   | Paging/filter parameters bound with `[AsParameters]`                       | grep                                             |
 
 ## Structure

@@ -103,11 +103,19 @@ Task<Results<Ok<T>, NotFound>>
 Created responses use the route name, never a hand-built URL:
 `TypedResults.CreatedAtRoute(list, nameof(GetDistributionListById), new { distributionListId = list.Id })`.
 
-**Collections.** `ResultSet<T>` (`{ Count, Items }`) when the collection is paged, sorted
-or searched, which is to say whenever the handler takes `[AsParameters] ListOptions`. A
-plain `List<T>` is correct for a bounded sub-collection of one parent (a case timeline, the
-reject reasons of one case, a settings list). Do not wrap those in `ResultSet<T>`, and do
-not return an unpaged `List<T>` from a search endpoint.
+**Collections.** `ResultSet<T>` (`{ Count, Items }`) is the default. Bind
+`[AsParameters] ListOptions` and return `ResultSet<T>` for any collection that can grow,
+**including a sub-collection of one parent**. Being a child of something does not make a
+set small. `GET {distributionListId}/contacts` in Messages is the shape: it binds
+`ListOptions` and returns `Ok<ResultSet<Contact>>`.
+
+A plain `List<T>` is the narrow exception: a set that is fixed by definition and cannot
+grow with data, such as a settings list, an enum-like lookup, or the reject reasons
+configured for one case type. If you are weighing it up, page it. The cost of paging a
+short list is one wrapper; the cost of not paging a long one is an endpoint that degrades
+silently as data arrives.
+
+Never return an unpaged `List<T>` from something searched or filtered.
 
 ```csharp
 public static async Task<Ok<ResultSet<DistributionList>>> GetDistributionLists(
@@ -219,7 +227,7 @@ recognise it in whatever repo you are in.
 | Routes and handlers in one `<Feature>Endpoints.cs`, some over a thousand lines                                                                                        | Split into `<Resource>Api.cs` plus `<Resource>Handlers.cs` plus service. For a **new resource or file**, always split. For **one endpoint added to an existing single-file group**, match the file, since a lone `*Handlers.cs` beside a 1000-line sibling helps nobody, and note in the PR that the file is a split candidate. |
 | Services returning a result object (`Success`, `ErrorCode`, `ErrorMessage`) that every handler unpacks by hand, mapped through a hand-written problem-details factory | `BusinessException` plus `.WithHandledException<BusinessException>()`. **Not convertible one handler at a time**, see the warning under `## Errors`. Convert a whole group or none.                                                                                                                                             |
 | `.AddEndpointFilter<SomeFilter>()` applied straight onto a group                                                                                                      | Wrap it in a `With*` extension that also registers the filter's status codes.                                                                                                                                                                                                                                                   |
-| `List<T>` returned from a paged, filtered search endpoint                                                                                                             | `ResultSet<T>` whenever `ListOptions` is bound. Safe to fix in place, but it is a breaking change for generated clients, so flag it.                                                                                                                                                                                            |
+| `List<T>` returned from any collection that can grow, including a child collection                                                                                    | `ResultSet<T>` is the default. Bind `ListOptions`. Safe to fix in place, but it is a breaking change for generated clients, so flag it.                                                                                                                                                                                         |
 | DataAnnotations on the request DTO instead of a validator class                                                                                                       | FluentValidation for new validation. Do not stack one on the other: pick the mechanism the request already uses, and if you change it, remove the other.                                                                                                                                                                        |
 | Endpoints with no `.WithSummary(...)`                                                                                                                                 | Add it. It lands in the generated client.                                                                                                                                                                                                                                                                                       |
 

@@ -37,9 +37,8 @@ Every convention an agent cannot infer without reading sibling code:
 
 - the two-file split and the `Microsoft.AspNetCore.Routing` namespace (11, 15, 16)
 - prefix from `IOptions<MessageManagementOptions>` rather than `"/message-tags"` (14)
-- `ResultSet<MessageTag>` for the paged list _and_ `List<Campaign>` for the
-  campaigns-using-a-tag sub-collection, the one task where both halves of the
-  collection rule are exercised (5, 6)
+- `ResultSet<MessageTag>` for the paged list, and `ResultSet<Campaign>` for the
+  campaigns-using-a-tag endpoint: a sub-collection that can grow is still paged (5, 6)
 - `WithName(nameof(...))` + `CreatedAtRoute` on the create endpoint (4, 21)
 - registration in `MapMessagingManagement()` rather than the host (13)
 

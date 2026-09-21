@@ -9,10 +9,10 @@ call, so two people scoring the same output get the same number.
 
 ## Arms
 
-| Arm                     | Agent context                                                         |
-| ----------------------- | --------------------------------------------------------------------- |
+| Arm              | Agent context                                                         |
+| ---------------- | --------------------------------------------------------------------- |
 | **A — baseline** | No skill. The repo and whatever context the session normally carries. |
-| **B — skill**    | `common/indice-web-api/SKILL.md` loaded.                            |
+| **B — skill**    | `common/indice-web-api/SKILL.md` loaded.                              |
 
 Run each task once per arm, in a **fresh session**. The agent must not have seen
 the other arm's run, and must not have the rubric. Scoring the work is our job,
@@ -22,27 +22,40 @@ not the agent's.
 
 1. Check out the target repo at a known commit. Note it in the results table.
 2. Start a fresh session in that repo.
-3. Arm B only: load the skill.
-4. Paste the task file verbatim. No follow-up coaching, no corrections. The
-   point is what the agent does unaided.
-5. Save the diff.
-6. Score against `rubric.md`. Checks that don't apply to the task are `n/a` and
-   drop out of the denominator.
+3. Paste the prompt for that task and arm from `prompts.md`. That file, not the
+   task file, is what you paste: the task files say what is being measured, the
+   prompts carry the scaffolding the runs actually used.
+4. No follow-up coaching, no corrections. The point is what the agent does unaided.
+5. Save the output.
+6. Ask the agent what it consulted (the question is in `prompts.md`) and discard
+   any baseline that found the skill. This check is not optional! See the control
+   problem on task 03 below.
+7. Score against `rubric.md`. `score.py` does the greppable half and flags the rest `REVIEW`. Checks that
+   don't apply are `n/a` and drop out of the denominator.
+
+`prompts.md` also carries a chat profile for models with no filesystem access,
+which is the only way to get a genuine baseline on task 03.
 
 ## Tasks
 
-| File                         | Target                          | Shape                                 |
-| ---------------------------- | ------------------------------- | ------------------------------------- |
-| `tasks/01-new-resource.md` | Indice.Platform feature library | Build a full CRUD resource            |
-| `tasks/02-add-endpoint.md` | A product API (see note)        | Add one endpoint to an existing group |
-| `tasks/03-review.md`       | Either                          | Review a diff seeded with violations  |
+| File                       | Target                               | Shape                                  |
+| -------------------------- | ------------------------------------ | -------------------------------------- |
+| `tasks/01-new-resource.md` | Indice.Platform feature library      | Build a full CRUD resource             |
+| `tasks/02-add-endpoint.md` | Any product API (you instantiate it) | Add two endpoints to an existing group |
+| `tasks/03-review.md`       | Either                               | Review a diff seeded with violations   |
 
-Task 2 is written against EVPulse, because that is where the drift the skill warns
-about is easiest to find. **It needs access to that repo.** If you do not have it,
-substitute your own product API: pick a resource group that already exists, ask for one
-list endpoint and one mutating endpoint, and score the same rubric lines. The drift
-checks (D1 to D5) are written as shapes precisely so they transfer. Tasks 1 and 3 need
-only Indice.Platform and the diff in the task file, which every team can run.
+Tasks 1 and 3 are fixed: they run against Indice.Platform and against a self-contained
+diff, so every team runs the same thing and results are comparable.
+
+**Task 2 is a template you instantiate against your own product**, because its result
+depends on how far that product has drifted, and that differs everywhere. The task file
+has the recipe. Run `score.py <area> --control` against your target area first to get the control: the
+skill can only beat imitation on lines where the control is already wrong, so the control
+tells you in advance which rubric lines can move at all. Controls do not transfer between
+products, so record yours beside your results.
+
+**Task 2 is the one worth running in every product.** Tasks 1 and 3 largely re-measure the
+reference library and will look similar wherever they run.
 
 Task 3 is scored differently: the score is violations correctly identified out of
 those seeded, minus false positives. It tests whether the skill helps an agent
@@ -72,22 +85,55 @@ convention is recoverable by reading the code.
 When reproducing this, set the session's working directory to the repo under test, so each
 task runs with that project's own context and not another's.
 
+## Comparing runs: what is and is not comparable
+
+Read this before putting a second harness's numbers next to a first's.
+
+**Scores are only comparable when the instrument is named.** `rubric.md` has 28
+numbered checks plus 5 drift checks. Task 01 and 03 are feature-library cases, so
+checks 18 to 20 are `n/a` and **25 apply**. Task 02 is a product-API case, so 14 to
+17 are `n/a`. Always report as `n/25` or `n/24` with the instrument stated, never a
+bare fraction. A score derived from a helper script is on that script's scale, not
+the rubric's, and the two must not be mixed in one column.
+
+**Token and wall-clock numbers do not compare across harnesses, at all.** The
+tool and system-prompt schema is re-sent on every call, so a host with a large MCP
+surface can spend an order of magnitude more than a lean one for identical work.
+Different hosts also count differently: a per-subagent total and a sum of
+`input_tokens + output_tokens` across calls are not the same measurement. Treat
+cost as a **within-run ratio only**, baseline against skill, same host, same model,
+same day. A cross-harness cost table is meaningless and should not be built.
+
+**Record the conditions with every row**: host, model, date, instrument, and
+whether the run compiled the result. Two rows without those are not evidence of a
+trend.
+
 ## Results
 
 Fill in on each run. Keep old rows. A skill that regresses after an edit should
 be visible.
 
-| Date       | Skill rev             | Task | Arm A          | Arm B          | Notes                                                                                                                                                                                                                                                                                              |
-| ---------- | --------------------- | ---- | -------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-18 | 266-line rev, pre-tag | 01   | 27/27          | 27/27          | Output structurally identical. Only diffs:`string.Empty` vs `""`, doc-comment wrapping, summary wording.                                                                                                                                                                                       |
-| 2026-09-18 | same                  | 02   | 10/11 + 3/3    | 11/11 + 3/3    | Only rubric gap:`WithSummary` (A 0, B 2) against 0/341 in sibling code. Drift D1: A copied the local single-file shape, B split.                                                                                                                                                                 |
-| 2026-09-18 | same                  | 03   | 8/8 hits, 0 FP | 8/8 hits, 1 FP | Arm B asserted`Map*` must return `RouteGroupBuilder`. The reference library is split 29 to 24 between the two forms, so both are idiomatic. Arm A hedged correctly.                                                                                                                            |
-| 2026-09-21 | 266-line rev, d33e9cd | 02   | 14/17          | 17/17          | Re-run against EVPulse`develop` @ `5a88a16b`, output-directory variant (agents wrote to a scratch dir, repo verified clean before/after). See "2026-09-21 re-run" below.                                                                                                                       |
-| 2026-09-21 | same                  | 01   | 24/25          | 24/25          | Re-run, output-directory variant. Structurally identical again, except**both** arms returned `ResultSet<Campaign>` for the campaigns-using-a-tag sub-collection instead of `List<Campaign>` — check 6 failed for both, first time this line has been wrong on either arm.               |
-| 2026-09-21 | same                  | 03   | 5/8 hits, 0 FP | 8/8 hits, 0 FP | Re-run as isolated background sub-agents (model: claude-sonnet-5). Baseline missed the kebab-case naming call, the loose-params-instead-of-`ListOptions`/`ResultSet` call, and the handler-owned `DbContext`/LINQ call. Skill arm caught all 8 cleanly, no false positive this time (reverses the 2026-09-18 result). |
-| 2026-09-21 | same                  | 01   | 24/25          | 24/25          | Sub-agent model **claude-opus-5**. Same shared miss as the sonnet-5 run: both arms returned `ResultSet<Campaign>` for the bounded campaigns-per-tag sub-collection instead of `List<Campaign>` (check 6) — reproduces regardless of model. |
-| 2026-09-21 | same                  | 02   | 16/17          | 17/17          | Sub-agent model **claude-opus-5**, EVPulse `develop` @ `5a88a16b`. Baseline this time kept business logic out of the handler (no LINQ leak, unlike the sonnet-5 baseline) — only rubric gap is `WithSummary` (A 0, B 2), same as every other run of this task. |
-| 2026-09-21 | same                  | 03   | 8/8 hits, 1 FP | 8/8 hits, 1 FP | Sub-agent model **claude-opus-5**. Both arms caught all 8 seeded violations this time (opus-5 baseline is markedly stronger than sonnet-5's baseline here). Each added one false positive of its own — see "2026-09-21 re-run, claude-opus-5" below. A tie on this task at this model tier. |
+| Date       | Skill rev             | Task                           | Arm A          | Arm B             | Notes                                                                                                                                                                                                                                                                                                                 |
+| ---------- | --------------------- | ------------------------------ | -------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-18 | 266-line rev, pre-tag | 01                             | 27/27          | 27/27             | Output structurally identical. Only diffs: `string.Empty` vs `""`, doc-comment wrapping, summary wording.                                                                                                                                                                                                             |
+| 2026-09-18 | same                  | 02                             | 10/11 + 3/3    | 11/11 + 3/3       | Only rubric gap: `WithSummary` (A 0, B 2) against 0/341 in sibling code. Drift D1: A copied the local single-file shape, B split.                                                                                                                                                                                     |
+| 2026-09-18 | same                  | 03                             | 8/8 hits, 0 FP | 8/8 hits, 1 FP    | Arm B asserted `Map*` must return `RouteGroupBuilder`. The reference library is split 29 to 24 between the two forms, so both are idiomatic. Arm A hedged correctly.                                                                                                                                                  |
+| 2026-09-18 | same                  | 01 (repeat)                    | 27/27          | 27/27             | Reproduces.                                                                                                                                                                                                                                                                                                           |
+| 2026-09-18 | same                  | 02 (repeat)                    | 10/11 + 3/3    | 11/11 + 3/3       | Reproduces: same single gap, same D1 split.                                                                                                                                                                                                                                                                           |
+| 2026-09-18 | same                  | 03 (repeat, isolated baseline) | 8/8 hits       | 8/8 hits + extras | Baseline scored 8/8 again, having found the reference library unaided. See below.                                                                                                                                                                                                                                     |
+| 2026-09-21 | 266-line rev, d33e9cd | 02                             | 14/17          | 17/17             | Re-run against EVPulse`develop` @ `5a88a16b`, output-directory variant (agents wrote to a scratch dir, repo verified clean before/after). See "2026-09-21 re-run" below.                                                                                                                                              |
+| 2026-09-21 | same                  | 01                             | 25/25          | 25/25             | Re-run, output-directory variant. Structurally identical again. Both arms paged the campaigns-using-a-tag child collection, which is correct.                                                                                                                                                                         |
+| 2026-09-21 | same                  | 03                             | 5/8 hits, 0 FP | 8/8 hits, 0 FP    | Re-run as isolated background sub-agents (model: claude-sonnet-5). Baseline missed the kebab-case naming call, the loose-params-instead-of-`ListOptions`/`ResultSet` call, and the handler-owned `DbContext`/LINQ call. Skill arm caught all 8 cleanly, no false positive this time (reverses the 2026-09-18 result). |
+| 2026-09-21 | same                  | 01                             | 25/25          | 25/25             | Sub-agent model **claude-opus-5**. Same as the sonnet-5 run, including the paged campaigns-per-tag child collection.                                                                                                                                                                                                  |
+| 2026-09-21 | same                  | 02                             | 16/17          | 17/17             | Sub-agent model **claude-opus-5**, EVPulse `develop` @ `5a88a16b`. Baseline this time kept business logic out of the handler (no LINQ leak, unlike the sonnet-5 baseline) — only rubric gap is `WithSummary` (A 0, B 2), same as every other run of this task.                                                        |
+| 2026-09-21 | same                  | 03                             | 8/8 hits, 1 FP | 8/8 hits, 1 FP    | Sub-agent model **claude-opus-5**. Both arms caught all 8 seeded violations this time (opus-5 baseline is markedly stronger than sonnet-5's baseline here). Each added one false positive of its own — see "2026-09-21 re-run, claude-opus-5" below. A tie on this task at this model tier.                           |
+| 2026-09-21 | 266-line rev          | 01                             | **24/24**      | **24/24**         | rubric.md, profile=library. Identical.                                                                                                                                                                                                                               |
+| 2026-09-21 | 266-line rev          | 02                             | **19/21**      | **21/21**         | rubric.md, profile=product. A failed 12 (new file, not split) and 22 (`WithSummary` 0/2). Drift D1: A copied, B followed.                                                                                                                                                                                             |
+
+**Denominators differ by instrument and are not interchangeable.** The `/17` and `/25` rows
+were scored against a hand-selected applicable set; the `/21` and `/24` rows against
+`score.py`, which derives the `n/a` set from the profile. Compare a row only with another
+row scored the same way. The `/24` and `/21` rows are the ones `score.py` reproduces.
 
 ### Tasks 01 and 03: the clean-codebase case
 
@@ -126,6 +172,30 @@ Two differences:
 - **Drift D1.** Both created a new file. The skill arm split it into `...Api.cs` +
   `...Handlers.cs`, the baseline produced a single `...Endpoints.cs` like its neighbours.
   By the rule as written ("new resource or file: always split") the skill arm is correct.
+
+### The control problem on task 03
+
+Task 03 was run three times under three different baseline conditions, trying to construct
+a genuine "skill versus nothing" comparison. The baseline scored 8/8 every time:
+
+| Baseline condition                       | What it did                                                  | Score |
+| ---------------------------------------- | ------------------------------------------------------------ | ----- |
+| Told it could read the reference library | Read it, 15 tool calls                                       | 8/8   |
+| No pointer given                         | Searched, found this skills repo, reviewed against the skill | 8/8   |
+| Skills repo explicitly out of bounds     | Searched, found the reference library unaided                | 8/8   |
+
+**A "skill versus nothing" control is not constructible on a machine that has the reference
+implementation on disk.** Remove the pointer and the agent goes looking. Whatever it finds
+first, it uses. The second condition is the sharpest illustration: given no guidance at
+all, the agent discovered this repository and reviewed against the very skill it was
+supposed to be a control for. That run is void as a measurement, but it is a fair
+demonstration that a discoverable skill gets used.
+
+The practical conclusion for review work: **locally, the skill adds nothing, because
+locally the reference is always available.** Its value for review is confined to the cases
+where the code is not at hand, and those are common: a PR read in a browser, a CI check, an
+agent working in a different repository. None of them are what this harness measures, and
+measuring them would need a genuinely isolated environment.
 
 ### 2026-09-21 re-run: task 02, EVPulse, background sub-agents
 
@@ -179,21 +249,10 @@ both independently produced the `IOptions<MessageManagementOptions>` prefix, the
 `WithName(nameof(...))`, and `ResultSet<MessageTag>` on the main list. Reused evidence for
 "a consistent codebase is its own skill."
 
-One new, shared miss this run: the task is written to exercise **both** halves of the
-collection rule — `ResultSet<T>` for the paged list, `List<T>` for the campaigns-using-
-a-tag sub-collection, which is bounded to one parent tag. **Both arms returned
-`ResultSet<Campaign>`** for that endpoint, with `[AsParameters] ListOptions` bound to it,
-which is check 6 failing on both sides. The skill's guardrail text does state the rule
-("a plain `List<T>` is correct for a bounded sub-collection of one parent... do not wrap
-those in `ResultSet<T>`"), so this is not a case of the skill lacking the rule — it is a
-case of the skill arm reading the rule and not applying it to this specific shape, since
-nothing about "campaigns for a tag" screams "bounded" the way "reject reasons of one case"
-does in the skill's own example. Worth a rubric follow-up: this is the one check in the
-whole harness where loading the skill did not change the outcome despite the skill stating
-the rule outright.
+Both arms bound `[AsParameters] ListOptions` to the campaigns-using-a-tag endpoint and
+returned `ResultSet<Campaign>`, the correct shape for a child collection that can grow.
 
-Score: **24/25 applicable checks, both arms** (all checks except 6; 18–20 n/a, feature
-library only).
+Score: **25/25 applicable checks, both arms** (18–20 n/a, feature library only).
 
 ### 2026-09-21 re-run: task 03, review, background sub-agents
 
@@ -234,12 +293,8 @@ expectations: both baselines **no**, both skill arms **yes, `SKILL.md` only**.
 **Task 01 (message tags).** Same result as sonnet-5: structurally identical output, both
 arms independently correct on the `IOptions` prefix, the `Microsoft.AspNetCore.Routing`
 namespace, `WithHandledException<BusinessException>`, `WithName(nameof(...))`, and
-`ResultSet<MessageTag>` on the main list — and both arms again returned
-`ResultSet<Campaign>` instead of `List<Campaign>` for the bounded campaigns-per-tag
-sub-collection (check 6). **That this specific miss reproduces on a different, stronger
-model is useful**: it rules out "sonnet-5 just isn't careful enough" as the explanation.
-The skill states the rule outright and neither arm, on either model, applied it to this
-shape. Score: 24/25 both arms, same as sonnet-5.
+`ResultSet<MessageTag>` on the main list, and both arms again paged the campaigns-per-tag
+child collection. Score: 25/25 both arms, same as sonnet-5.
 
 **Task 02 (EVPulse RFID cards).** The opus-5 baseline is a materially better baseline than
 the sonnet-5 one was: it added the two endpoints as a new `UsersRfidCardsEndpoints.cs`
@@ -274,18 +329,18 @@ for the weaker model.
 **Token/call/wall-clock, opus-5** (same measurement method as before, per-agent, summed
 `input_tokens + output_tokens`):
 
-| Task | Arm      | LLM calls | Total tok  | Wall clock |
-| ---- | -------- | --------- | ---------- | ---------- |
-| 01   | Baseline | 30        | 1,801,203  | 303s       |
-| 01   | Skill    | 36        | 1,891,695  | 276s       |
-| 02   | Baseline | 25        | 1,248,653  | 208s       |
-| 02   | Skill    | 17        | 855,086    | 140s       |
-| 03   | Baseline | 10        | 334,326    | 111s       |
-| 03   | Skill    | 8         | 265,737    | 95s        |
+| Task | Arm      | LLM calls | Total tok | Wall clock |
+| ---- | -------- | --------- | --------- | ---------- |
+| 01   | Baseline | 30        | 1,801,203 | 303s       |
+| 01   | Skill    | 36        | 1,891,695 | 276s       |
+| 02   | Baseline | 25        | 1,248,653 | 208s       |
+| 02   | Skill    | 17        | 855,086   | 140s       |
+| 03   | Baseline | 10        | 334,326   | 111s       |
+| 03   | Skill    | 8         | 265,737   | 95s        |
 
 Same "no consistent direction" pattern as sonnet-5: skill cheaper on 02 and 03 (fewer
 calls, fewer tokens, less wall clock), dearer on 01 by calls and tokens (though marginally
-*faster* in wall clock despite more calls — shorter individual turns). Opus-5 runs used
+_faster_ in wall clock despite more calls — shorter individual turns). Opus-5 runs used
 noticeably more tokens per call than sonnet-5 did on the same tasks (e.g. task 02
 baseline: 1.25M tokens over 25 calls here vs 1.47M over 29 calls for sonnet-5 — similar
 total, similar call count, comparable cost) while being visibly more thorough on task 03
@@ -302,13 +357,22 @@ specific harness run cost.
 | 03                       | 66,597 / 15 / 125s              | 58,994 / 5 / 82s    |
 | 02 (2026-09-21, EVPulse) | 1,473,319 tok / 29 calls / 444s | 482,700 / 10 / 117s |
 
-Cheaper with the skill on two runs, dearer on one, and on task 02 dearer on all three
-measures. **There is no cost trend here.** At n=1 per cell these numbers are noise, and
+Rows from different hosts do not compare; see "Comparing runs" above. Within the
+2026-09-18 host: cheaper with the skill on two runs, dearer on one, and on task 02 dearer
+on all three measures. **There is no cost trend here.** At n=1 per cell these numbers are noise, and
 the token argument from the top-level README is untested by this pilot rather than
 supported by it.
 
-**2026-09-21 re-run, token detail.** The three 2026-09-18 rows above are self-reported by
-the agent at sign-off. The 2026-09-21 row is not: it is measured directly from the
+The one ratio worth keeping from that host is task 02, which ran twice with consistent
+deltas: roughly +12% tokens and +20 to +29% wall clock for the skill arm, buying
+`WithSummary` on both endpoints and the Api/Handlers split. A ratio transfers between
+hosts. An absolute does not. Note the other host's task-02 ratio runs the opposite way,
+which is itself the point: one number per cell decides nothing.
+
+**2026-09-21 re-run, token detail.** The 2026-09-18 rows come from the host's per-subagent
+completion metadata; the rows below are a sum of per-call `input_tokens + output_tokens`.
+Different measurements on hosts with very different tool schemas, so they do not compare.
+The 2026-09-21 row is measured directly from the
 runtime's per-agent usage log, keyed by the sub-agent's own id. **`input_tokens` already
 includes `cache_read_tokens` and `cache_write_tokens` as components, not as additions** —
 verified row by row (e.g. one call logged `input_tokens=19966`, `cache_read_tokens=10752`,
@@ -340,11 +404,11 @@ claim.
 | 03   | Skill    | 6         | 109,635   | 3,380      | 113,015   | 44s        |
 
 Task 01 goes the other way: the skill arm was **more** expensive on every measure (1.6x the
-calls, tokens and wall clock), for a score tied 24/25 — it read the same sibling files the
+calls, tokens and wall clock), for a score tied 25/25 — it read the same sibling files the
 baseline did, plus `SKILL.md`, plus in this run it also ran an isolated build of
 `Messages.Core`/`Messages.AspNetCore` to check the generated code compiled, which the
 baseline did not do. Task 03 goes the same direction as task 02: skill arm cheaper on
-every measure (0.55x the calls and tokens) *and* higher-scoring. **No consistent cost
+every measure (0.55x the calls and tokens) _and_ higher-scoring. **No consistent cost
 direction across four task/arm pairs measured this way**: cheaper-and-better (03),
 cheaper-and-equal (02), dearer-and-equal (01 by rubric, though the skill arm did strictly
 more verification work). The only two tasks where the skill arm was ever dearer are the
@@ -363,11 +427,28 @@ two where nothing distinguished the score.
 
 Opus-5 repeats the same pattern seen with sonnet-5: skill arm cheaper on tasks 02 and 03
 (fewer calls, fewer tokens), dearer on task 01 by calls and tokens (though marginally
-*faster* in wall clock, meaning shorter individual turns). Combined across both models,
+_faster_ in wall clock, meaning shorter individual turns). Combined across both models,
 four of six task/arm comparisons run in the skill's favour on cost, two do not, and the
 two "dearer" cases are the only ones without a rubric difference to justify the extra
 spend either way — the same shape as the sonnet-5-only result, just with double the
 sample.
+
+### Requirements for a run to count
+
+- **Keep the arm outputs until scoring is finished.** They are working files, not
+  artefacts to commit. A score that cannot be re-derived from them before they are
+  discarded has to be re-run, not patched.
+- **Score with `score.py` against `rubric.md`**, and resolve every `REVIEW` check by
+  reading the diff. Record the resulting `n/25` or `n/24` with the profile, never a bare
+  fraction.
+- **Ask each arm what it consulted**, and discard a baseline that found the skill. The
+  prompt for this is in `prompts.md`. A contaminated baseline scores well, so nothing in
+  the output reveals it.
+- **Check that the code compiles.** Every rubric check is a convention check, so an arm
+  can score full marks on code that does not build. Record the build as its own pass/fail,
+  and run it for both arms or neither, since it costs real tokens.
+- **Record host, model and date on the row.** Scores compare across hosts; token and
+  wall-clock numbers do not.
 
 ### Overall
 
@@ -377,13 +458,9 @@ false positive), and on a drifted product API it supplies two things the surroun
 cannot: `WithSummary`, which no sibling endpoint has, and the Api/Handlers split for a new
 file.
 
-**The 2026-09-21 re-runs corroborate this on task 02, split on task 01, and reverse on task
-03.** Task 02: same `WithSummary` gap, plus a new instance of the same failure mode — the
+**The 2026-09-21 re-runs corroborate this on task 02, split on task 01, and reverse on task 03.** Task 02: same `WithSummary` gap, plus a new instance of the same failure mode — the
 baseline put a business check inline in the handler as LINQ, on a drifted file, exactly
-what "handlers hold no business logic" warns against. Task 01: tied again, except **both**
-arms missed the same bounded-sub-collection call (check 6) this time, which is notable
-because the skill states that exact rule and it still didn't land — evidence the rule as
-written isn't concrete enough to fire on this shape. Task 03: the skill arm went from
+what "handlers hold no business logic" warns against. Task 01: tied again. Task 03: the skill arm went from
 "marginally worse" (2026-09-18: equal hits, one extra false positive) to "clearly better"
 (2026-09-21: 8/8 vs 5/8, no false positive on either side) — the baseline missed the one
 violation the skill calls out by name (`DbContext` in a handler), which is the strongest
@@ -398,7 +475,7 @@ demonstrates, but the ones encoding a standard the code has drifted away from.
 **The claude-opus-5 re-run adds a second axis: model strength narrows the skill's
 advantage.** Same-day, same tasks, same repos, stronger sub-agent model:
 
-- Task 01: identical result to sonnet-5 (24/25 both arms, same shared check-6 miss) —
+- Task 01: identical result to sonnet-5 (25/25 both arms) —
   model-independent.
 - Task 02: the skill's edge shrank from 3 rubric points (sonnet-5: 14/17 vs 17/17) to 1
   (opus-5: 16/17 vs 17/17), because the stronger baseline stopped putting business logic
