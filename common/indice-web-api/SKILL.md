@@ -50,14 +50,19 @@ but "the file next to it does X" is not by itself a justification for X.
 
 ## Anatomy of an endpoint
 
-Three files per resource:
+Per route group:
 
 - `<Resource>Api.cs` declares the route group and the `Map*` calls, nothing else. It should
   read as a description of the surface. `internal static class`, and in a feature library
   declared in `namespace Microsoft.AspNetCore.Routing`.
 - `<Resource>Handlers.cs` is an `internal static class` of thin handler methods.
-- `I<Entity>Service`, one per entity, owns the logic. Handlers call it and translate the
-  result to a response. They hold no business logic.
+- `I<Something>Service` owns the logic, **one per route group**, not one per entity. The
+  same entity served to two audiences gets two services: Cases has `IAdminCaseService` for
+  the back-office group and `IMyCaseService` for the current-user one. Handlers call it and
+  translate the result to a response. They hold no business logic.
+- `<Request>Validator.cs`, one per request type, in its own file under `Validators/` (or
+  `<Area>/Validation/`). See `## Validation`. Messages keeps
+  `CreateDistributionListRequestValidator` beside the service it guards.
 
 Never inline a lambda into a `MapGet`/`MapPost`. The route declaration names a method,
 always.
@@ -69,9 +74,15 @@ always.
 ## Routes and naming
 
 Kebab-case, plural nouns (`distribution-lists`, `payment-methods`). `my/` prefixes a
-current-user resource, `admin/` a back-office one. Sub-resources nest under the parent id
+current-user resource, `manage/` a back-office one (`manage/cases`, `manage/case-types`). Sub-resources nest under the parent id
 (`{caseId}/attachments/{attachmentId}`). Non-CRUD actions are a verb segment
 (`{userId}/block`, `{campaignId}/publish`).
+
+**Route parameters are always `{<entity>Id}`**, never a bare `{id}`: `{caseId}`,
+`{distributionListId}`, `{userId}`. The name must say what it identifies, including in
+`CreatedAtRoute` route values (`new { caseId = model.Id }`). Leave the type off the route
+(`{caseId}`, not `{caseId:guid}`): the handler parameter already declares it. Add a
+constraint only where the handler does not type the parameter explicitly.
 
 ```csharp
 // Feature library: never a literal, the host must be able to relocate it.
@@ -79,7 +90,7 @@ var options = routes.ServiceProvider.GetRequiredService<IOptions<MessageManageme
 var group = routes.MapGroup(options.PathPrefix.TrimEnd('/') + "/distribution-lists");
 
 // Product API: a literal is correct. Do not invent IOptions plumbing for one consumer.
-var group = builder.MapGroup("admin/invoices");
+var group = builder.MapGroup("manage/invoices");
 ```
 
 Each area gets an aggregator that composes the group mappers in order
@@ -157,8 +168,8 @@ one endpoint. It composes with the group policy.
 `ProducesResponseType(400, HttpValidationProblemDetails)`, so do not add that yourself.
 
 FluentValidation is the standard:
-`public class <Request>Validator : AbstractValidator<TRequest>` in `Models/Validators/` or
-`<Area>/Validation/`, picked up by
+`public class <Request>Validator : AbstractValidator<TRequest>` in its own file under
+`Validators/` or `<Area>/Validation/`, picked up by
 `services.AddEndpointParameterFluentValidation(typeof(X).Assembly)`.
 
 The filter resolves `IValidator<TRequest>` and **falls back to DataAnnotations via
@@ -229,6 +240,7 @@ recognise it in whatever repo you are in.
 | `.AddEndpointFilter<SomeFilter>()` applied straight onto a group                                                                                                      | Wrap it in a `With*` extension that also registers the filter's status codes.                                                                                                                                                                                                                                                   |
 | `List<T>` returned from any collection that can grow, including a child collection                                                                                    | `ResultSet<T>` is the default. Bind `ListOptions`. Safe to fix in place, but it is a breaking change for generated clients, so flag it.                                                                                                                                                                                         |
 | DataAnnotations on the request DTO instead of a validator class                                                                                                       | FluentValidation for new validation. Do not stack one on the other: pick the mechanism the request already uses, and if you change it, remove the other.                                                                                                                                                                        |
+| Back-office groups under `admin/`, or bare `{id}` route parameters                                                                                                    | `manage/` and `{<entity>Id}` for new groups and routes. Renaming an existing route is a breaking change for every client, so leave it and add new endpoints to the group as it is.                                                                                                                                              |
 | Endpoints with no `.WithSummary(...)`                                                                                                                                 | Add it. It lands in the generated client.                                                                                                                                                                                                                                                                                       |
 
 ## Relationship to `dotnet-webapi`
@@ -236,16 +248,27 @@ recognise it in whatever repo you are in.
 `dotnet/skills`' `dotnet-webapi` is the assumed baseline and we agree with most of it.
 Where it conflicts with the table below, this skill wins.
 
-| `dotnet-webapi` says                                                        | At Indice                                                                                                                         |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| DTOs are `sealed record`                                                    | `public class <Name>Request`, records are the rare exception                                                                      |
-| `CancellationToken` on every endpoint                                       | Only where it is actually forwarded downstream                                                                                    |
-| No Swashbuckle on .NET 9+                                                   | Platform depends on `Swashbuckle.AspNetCore.SwaggerGen`. Product APIs use built-in `AddOpenApi`/`MapOpenApi` with named documents |
-| `TypedResults.Created($"/api/x/{id}", ...)`                                 | `TypedResults.CreatedAtRoute(model, nameof(GetById), new { id })`                                                                 |
-| A `.http` file per project                                                  | Not an Indice practice                                                                                                            |
-| Fall back to untyped `Results` past ~7 branches                             | Never. Annotate the union or split the endpoint                                                                                   |
-| `{Entity}Response` / `{Entity}ListResponse` names                           | Domain model plus `ResultSet<T>`, no `...Response` suffix convention                                                              |
-| One static class per resource with `Map<Resource>(this WebApplication app)` | Extension is on `IEndpointRouteBuilder`, and routes are split from handlers across two files                                      |
+| `dotnet-webapi` says                                                        | At Indice                                                                                    |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `CancellationToken` on every endpoint                                       | Only where it is actually forwarded downstream                                               |
+| `TypedResults.Created($"/api/x/{id}", ...)`                                 | `TypedResults.CreatedAtRoute(model, nameof(GetEntityById), new { entityId = model.Id })`     |
+| A `.http` file per project                                                  | Not an Indice practice                                                                       |
+| Fall back to untyped `Results` past ~7 branches                             | Never. Annotate the union or split the endpoint                                              |
+| `{Entity}ListResponse` for collections                                      | `ResultSet<T>` of the domain model                                                           |
+| One static class per resource with `Map<Resource>(this WebApplication app)` | Extension is on `IEndpointRouteBuilder`, and routes are split from handlers across two files |
+
+## Records
+
+Use records for new types that carry data: request and response models, domain models,
+events and commands, service results. Positional records where the type is small
+(`public record SessionRequest(string? ExternalRefId, string? Referrer);`,
+`public record CreateFolderResponse(Guid FolderId);`). Agents, Media and the SignalR proxy
+contracts are the examples to follow.
+
+Most existing Platform DTOs are classes because they were written before records existed.
+That is history, not a convention. Do not copy the class shape into new code, and do not
+convert an existing class to a record in passing: it changes equality semantics and is not
+the change you were asked to make.
 
 ## Do / Do not
 

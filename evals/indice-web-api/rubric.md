@@ -8,15 +8,15 @@ Score = passed / (applicable).
 
 ## Return types
 
-| #   | Check                                                                      | How to verify                                    |
-| --- | -------------------------------------------------------------------------- | ------------------------------------------------ | -------- | ---------- | -------------------------- |
-| 1   | Every handler returns `TypedResults.*`                                     | `grep -E '[^d]Results\.(Ok                       | NotFound | BadRequest | NoContent)'` finds nothing |
-| 2   | No `IResult` / `IActionResult` / `ActionResult<T>` in a signature          | grep                                             |
-| 3   | Multi-outcome handlers annotated `Task<Results<…>>`                        | Read each handler with more than one exit        |
-| 4   | Created response uses `CreatedAtRoute` with `nameof`, not a hand-built URL | grep `CreatedAtRoute` vs `TypedResults.Created(` |
-| 5   | Search/list endpoint taking `ListOptions` returns `ResultSet<T>`           | Read the list handler                            |
+| #   | Check                                                                                                                                            | How to verify                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | -------- | ---------- | -------------------------- |
+| 1   | Every handler returns `TypedResults.*`                                                                                                           | `grep -E '[^d]Results\.(Ok                                                                                  | NotFound | BadRequest | NoContent)'` finds nothing |
+| 2   | No `IResult` / `IActionResult` / `ActionResult<T>` in a signature                                                                                | grep                                                                                                        |
+| 3   | Multi-outcome handlers annotated `Task<Results<…>>`                                                                                              | Read each handler with more than one exit                                                                   |
+| 4   | Created response uses `CreatedAtRoute` with `nameof`, not a hand-built URL                                                                       | grep `CreatedAtRoute` vs `TypedResults.Created(`                                                            |
+| 5   | Search/list endpoint taking `ListOptions` returns `ResultSet<T>`                                                                                 | Read the list handler                                                                                       |
 | 6   | No `List<T>` returned from a collection that can grow; `ResultSet<T>` is the default and `List<T>` needs a fixed-by-definition set to justify it | Read each collection return. `n/a` if the task has only one collection endpoint, already covered by check 5 |
-| 7   | Paging/filter parameters bound with `[AsParameters]`                       | grep                                             |
+| 7   | Paging/filter parameters bound with `[AsParameters]`                                                                                             | grep                                                                                                        |
 
 ## Structure
 
@@ -76,10 +76,10 @@ when the skill says to match the file, but it is worth counting.
 
 ## Routing
 
-| #   | Check                                                       | How to verify |
-| --- | ----------------------------------------------------------- | ------------- |
-| 27  | Route segments kebab-case, plural for collections           | Read          |
-| 28  | Current-user routes under `my/`, back-office under `admin/` | Read          |
+| #   | Check                                                        | How to verify                                                                                            |
+| --- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| 27  | Route segments kebab-case, plural for collections            | Read                                                                                                     |
+| 28  | Current-user routes under `my/`, back-office under `manage/` | Read. Scores the prefix of a **new** group only. Endpoints added to an existing group inherit its prefix |
 
 ---
 
