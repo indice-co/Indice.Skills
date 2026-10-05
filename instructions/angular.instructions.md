@@ -3,7 +3,7 @@ applyTo: "**/*.ts"
 ---
 # Indice Angular conventions (always on)
 - Follow the common `angular-conventions` skill.
-- Before building new UI, auth, or configuration code, check Indice.Angular (see the `indice-angular` skill) and say what you checked.
+- Before building new UI, auth, or configuration code, check Indice.Angular (https://github.com/indice-co/Indice.Angular) and say what you checked.
 - Where an imported skill and an Indice skill disagree, the Indice skill wins.
 - Match the Angular version and patterns of the app you are in. Do not migrate modules, templates, or change detection in code you were not asked to change.
 - New components, directives, and pipes are standalone and use `input()` / `output()`, built-in control flow (`@if`, `@for`, `@switch`), and OnPush change detection.
