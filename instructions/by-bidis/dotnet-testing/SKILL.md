@@ -3,7 +3,9 @@ name: dotnet-testing
 description: >
   Use when writing, reviewing, or choosing tests for C#/.NET code: default test
   stack (xUnit, Testcontainers, WebApplicationFactory), which layer to test at,
-  determinism, fixtures, mocking, risk-triggered test categories, test data, and naming.
+  determinism, fixtures, mocking, architecture tests (NetArchTest), E2E tests
+  (Playwright), load and concurrency tests (k6/NBomber), risk-triggered test
+  categories, test data, and naming.
 ---
 
 # .NET testing rules
@@ -23,9 +25,9 @@ Defaults for new test projects; existing repositories keep their stack.
 | Unit | xUnit | Domain rules, value objects, validators, pure calculations, state transitions |
 | Integration | xUnit + `WebApplicationFactory<TProgram>` + Testcontainers | Real database, transactions, middleware, authentication and authorization wiring, serialization |
 | Contract | xUnit | Module, event, or external provider contracts |
-| Architecture | NetArchTest | The repository already has architecture tests, or boundary rules change |
-| E2E | Microsoft.Playwright | Required critical journeys only |
-| Load / concurrency | k6 or NBomber | Defined performance or concurrency requirements only |
+| Architecture | NetArchTest | New or changed boundary rules; otherwise run the existing suite |
+| E2E | Playwright | Required critical journeys or material cross-system risks |
+| Load / concurrency | k6 or NBomber | Defined performance or concurrency requirements, known contention paths, credible introduced races |
 
 Licensing: FluentAssertions v8+ and NBomber require commercial licences for company use. Keep whatever assertion library the repository already uses; for new projects use a free alternative (for example AwesomeAssertions or Shouldly) or pin FluentAssertions 7.x.
 
@@ -55,6 +57,39 @@ Licensing: FluentAssertions v8+ and NBomber require commercial licences for comp
 * Async tests return `Task`; no `async void`, `.Result`, or `.Wait()`.
 * Use `[Theory]` with `InlineData` / `MemberData` for equivalence classes and boundaries.
 * Capture logs with `ITestOutputHelper` or `FakeLogger<T>` for diagnostics, not to assert call counts.
+
+## Architecture tests (NetArchTest)
+
+* Encode only boundary rules the architecture actually defines: layer dependencies (domain does not reference infrastructure or ASP.NET Core), module isolation, and visibility conventions. Do not encode style preferences or checklists.
+* Add or change a rule only when a boundary rule is introduced or changed; otherwise run the existing suite.
+* One rule per test. On failure, report the offending types.
+
+```csharp
+var result = Types.InAssembly(typeof(Order).Assembly)
+    .That().ResideInNamespace("MyApp.Domain")
+    .ShouldNot().HaveDependencyOn("Microsoft.EntityFrameworkCore")
+    .GetResult();
+
+Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+```
+
+## E2E tests (Playwright)
+
+* Only for required critical journeys (for example sign-in and the product's core flow) or a material cross-system risk. Edge cases belong in lower layers; keep the suite small.
+* Use `Microsoft.Playwright` when the E2E suite lives in the .NET solution; follow the repository if it already uses `@playwright/test`.
+* Locate by role, label, or test id (`GetByRole`, `GetByLabel`, `GetByTestId`), not CSS or XPath. Use auto-waiting assertions (`Expect(locator).ToBeVisibleAsync()`); never fixed delays.
+* Each test creates its own data and does not depend on execution order.
+* Authenticate once and reuse the stored state; only the sign-in test goes through the login UI.
+* Run against a dedicated test environment with test accounts, never production or real users. Keep traces and screenshots for failures only.
+
+## Load and concurrency tests (k6 / NBomber)
+
+* Only for defined performance or concurrency requirements, known contention paths, or credible introduced races.
+* Every load test declares pass/fail thresholds (for example p95 latency and error rate) through k6 `thresholds` or NBomber assertions. No threshold, no test.
+* Prefer k6 for HTTP-level load. Use NBomber when the scenario needs .NET code (in-process clients, non-HTTP protocols), subject to its licence.
+* Run against an isolated, production-like environment with synthetic data and stubbed external providers. Never against production or shared environments without agreement.
+* Keep load tests out of the regular CI test run; run them on demand or on a schedule.
+* For a race on one specific path, a focused integration test that fires parallel requests (`Task.WhenAll`) against a real database is usually enough; reserve load tools for throughput and latency.
 
 ## Risk-triggered categories
 
