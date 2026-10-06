@@ -5,3 +5,4 @@
 # Kept locally so a run can be re-scored, not pushed. See evals/*/README.md for
 # what to record in the results table instead.
 evals/*/runs/
+.vs

@@ -44,9 +44,8 @@ permission scheme that Platform has no equivalent for, keep using it. Nothing he
 replaces it.
 
 **Everything else that differs is drift, not a second convention.** See
-`## Known drift in product APIs` before copying a pattern out of a product repo. Local
-consistency still matters, and that section says when to match a file and when to fix it,
-but "the file next to it does X" is not by itself a justification for X.
+does X" is not by itself a justification for X. `## Known drift in product APIs` says when
+to match existing code anyway and when to fix it.
 
 ## Anatomy of an endpoint
 
@@ -270,19 +269,6 @@ That is history, not a convention. Do not copy the class shape into new code, an
 convert an existing class to a record in passing: it changes equality semantics and is not
 the change you were asked to make.
 
-## Do / Do not
-
-- **Do** name the endpoint `nameof(TheHandler)` and let `CreatedAtRoute` use it.
-- **Do** put the `.ProducesProblem(...)` codes on the group, once, not on every endpoint.
-- **Do** check which validation mechanism a request already uses before adding one.
-- **Do not** inline a lambda into a route declaration.
-- **Do not** put business logic, LINQ, or a `DbContext` in a handler.
-- **Do not** return `IResult`, `IActionResult`, or untyped `Results.*`.
-- **Do not** hardcode a group prefix in a feature library, or plumb an `IOptions` prefix
-  through a product API that has no second consumer.
-- **Do not** reconfigure JSON, auth, CORS or ProblemDetails inside a feature.
-- **Do not** treat a pattern as correct because the file next to it does it. Check it
-  against `## Known drift in product APIs` first.
 
 ## Examples
 
@@ -290,8 +276,8 @@ The reference implementation is Messages' distribution lists:
 `Endpoints/DistributionListsApi.cs` (the surface) and `Endpoints/DistributionListsHandlers.cs`
 (thin handlers over `IDistributionListService`). Copy its shape.
 `Indice.Features.Cases.Server`'s `AdminAccessRulesApi.cs` shows per-endpoint authorization
-overrides on a group policy.
+overrides on a group policy. Its routes are under `manage/`; the `Admin` in the file and
+class name is not a route convention, so do not carry it into new names.
 
 Both are in Indice.Platform, which every team can read. Prefer them over a file in your
-own repo when you need a model to copy: a product repo shows you what that product does,
-which is not always what it should do.
+own repo when you need a model to copy.
