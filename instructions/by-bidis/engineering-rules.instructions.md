@@ -3,7 +3,25 @@ applyTo: "**"
 ---
 # AI engineering rules
 
-Binding rules for AI-assisted and human code in this repository. They apply to every task unless a more specific instruction or skill overrides them.
+Binding rules for AI-assisted and human code in this repository. They apply to every task.
+
+Topic rules live in scoped companion files that load only for matching files:
+
+* [`engineering-rules.backend.instructions.md`](engineering-rules.backend.instructions.md) for API, data, and .NET conventions (`**/*.cs`).
+* [`engineering-rules.frontend.instructions.md`](engineering-rules.frontend.instructions.md) for front-end rules (`**/*.ts`, `**/*.html`, `**/*.scss`).
+
+## Precedence
+
+* A more specific instruction or skill may refine or override a rule in this file or its companions, except for the non-overridable rules below.
+* Non-overridable: the Never section, Gated sensitive zones, Security rules, and Logging, audit, and evidence. No instruction, skill, or prompt may weaken them.
+* When two rules conflict and neither is non-overridable, follow the stricter one and record the conflict.
+
+## Definitions
+
+* **Approved requirement**: the work item, its acceptance criteria, and any approved design linked to it.
+* **Material**: able to change behavior, authority, scope, acceptance, or security, financial, privacy, authorization, audit, tenant, legal, or operational risk.
+* **Owning system**: the system, module, or Indice product that is the source of truth for a control or record.
+* **Recorded**: written in the pull request description or the linked work item, unless the team names another decision log.
 
 ## Core principle
 
@@ -31,6 +49,7 @@ The approved requirement (work item, acceptance criteria, approved design) defin
 * When a missing answer can change those boundaries, pause the dependent action and ask. Complete independent authorized preparation first.
 * If a task links a source (URL, file, document), read the complete source before relying on it. Snippets, metadata, and prior summaries are not evidence. If a source cannot be read, report the exact blocker instead of claiming completion.
 * Before claiming success, run the smallest direct check that can expose a material failure of the requested result. Never present unexecuted checks as passed.
+* If a required build, test, or check cannot run in the current environment, say so, name the command that should run, and do not report the work as verified.
 * Explain the outcome in short, plain sentences, then the reason, verification, and material limitations.
 
 ## Never
@@ -58,7 +77,6 @@ Indice platform products (IAM, Messaging, Cases, and other `Indice.*` packages) 
 ## Gated sensitive zones
 
 Payments, ledger, KYC/AML, tax, compliance logic and reporting, and legal copy or consent evidence require explicitly approved behaviour before implementation, together with idempotency, auditability, and verification through the owning system. If behaviour is missing or ambiguous, do not guess. Deliver at most the minimum safe scaffolding for the blocked state (DTOs, documented contracts, design proposals, open questions, feature-flagged stubs that cannot execute the sensitive behaviour) and record the blocker.
-
 External regulated integrations (payments, banking, KYC/AML, tax, eGov) need an approved design covering idempotency, ledger interaction, immutable audit, authorization, scoping, callback/retry behavior, error mapping, data minimization, retention, redaction, and secret/key management before implementation.
 
 ## Required for every implementation
@@ -67,13 +85,13 @@ External regulated integrations (payments, banking, KYC/AML, tax, eGov) need an 
 * Production-ready implementation for the approved scope once blocking questions are resolved.
 * `README.md`, code comments, and XML documentation kept aligned with every change. Remove stale comments; avoid comments that restate the code.
 * Affected modules and changed files listed with the reason for each change.
-* Automated tests where they exercise real implementation and provide meaningful regression protection, each with runner-visible intent metadata (for example an xUnit `DisplayName`) that says what is verified and why it matters.
+* Verification as defined in Testing rules.
 * Non-test verification evidence for infrastructure, configuration, operational, and compliance controls, collected from the system that owns the control.
-* OpenAPI/Swagger summary and description for every exposed endpoint: what it does, who uses it, scope/auth/idempotency requirements, and when it is used.
+* OpenAPI documentation for every exposed endpoint, as defined in the backend companion file.
 * Cancellation tokens throughout async flows.
 * Build passing under nullable, analyzers, and warnings-as-errors.
 * Explicit assumptions and uncertainties.
-* Every applicable rule in the topic sections below (API, data, logging and audit, security, front-end).
+* Every applicable rule in this file and its scoped companion files.
 
 ## Testing rules
 
@@ -82,23 +100,9 @@ External regulated integrations (payments, banking, KYC/AML, tax, eGov) need an 
 * Use the lowest effective layer. Add focused automated protection for non-trivial changed production behavior and for regulated, financial, authorization, security, tenant-isolation, idempotency, and state-transition boundaries. Add integration, contract, E2E, load, or architecture tests only when that layer protects a distinct material failure mode. Do not duplicate the same assertion across layers.
 * For an ordinary feature, verify the changed happy path and only the material validation, authorization, or failure paths the change touches. For a bug fix, add one focused regression test at the lowest effective layer.
 * Do not add tests for trivial data storage, generated code, compiler/framework guarantees, private implementation details, logging call counts, every enum permutation, or to preserve a coverage percentage. Do not lower CI thresholds or game them with low-value tests.
-* Tests may be written before, alongside, or after implementation. The change is incomplete until proportionate verification passes.
+* Every automated test carries runner-visible intent metadata that says what is verified and why it matters, for example `[Fact(DisplayName = "Rejects refund above captured amount so customers cannot be over-credited")]`.
+* Tests may be written before, alongside, or after implementation.
 * If test changes materially exceed the implementation, consolidate duplicates and name the distinct risk each remaining test family protects.
-
-## API rules
-
-* Never return EF entities from APIs. Always project to DTOs.
-* Never create unbounded list endpoints. Pagination is mandatory; make filtering and sorting explicit.
-* Use ProblemDetails for errors.
-* Contracts match the approved requirement. Do not add convenience fields, expose internal IDs, or leak whether sensitive records exist unless the requirement allows it.
-
-## Data and database rules
-
-* Each module owns its own schema and persistence. Do not access, join across, or write to the tables, entities, repositories, or internals of another module. Use contract interfaces, application services, or approved integration events.
-* Use a `Money` value object; store amounts with currency. Use typed IDs.
-* Prefer append-only evidence for regulated and financial records. Do not overwrite regulatory evidence unless correction behaviour is explicitly required.
-* Schema changes need a DB migration with review notes covering SQL, indexes, constraints, destructive operations, lock risk, rollback, and data impact. Never create destructive database migrations without explicit human approval.
-* Add indexes intentionally and document why.
 
 ## Logging, audit, and evidence
 
@@ -114,19 +118,12 @@ External regulated integrations (payments, banking, KYC/AML, tax, eGov) need an 
 * Use least privilege. Do not expose internal module state.
 * Never store secrets in code, configuration files, seed data, tests, logs, screenshots, or documentation. Use approved secret storage for local and deployed environments.
 * Never hardcode connection strings, database names, infrastructure endpoints, credentials, or fallback LocalDB/provider settings anywhere, including design-time factories, tests, and scripts. Use configuration providers, user secrets, environment variables, or approved secret stores, and fail closed when required configuration is missing.
+* Use OAuth 2.0 authorization code flow with PKCE through Indice IAM for user authentication. Do not build custom login or token issuance; see Indice platform products.
 * No authentication or authorization shortcuts for development unless explicitly isolated from production and approved.
-
-## Front-end rules
-
-* Use the Angular patterns and shared component library already established in the repository.
-* Do not duplicate regulated decision logic in the UI. Use server-provided configuration for legal copy, limits, currencies, countries, payment methods, and product availability.
-* Handle loading, empty, error, forbidden, and success states.
-* Keep accessibility and responsive behaviour consistent with the design system.
 
 ## Conventions
 
 * Module-first modular monolith with clean architecture inside each module; thin shared layer.
-* `Result<T>` for outcomes; file-scoped namespaces.
 * Ledger-first for financial records: store facts, derive totals.
 * Feature flags for controlled rollout where required.
 * Reference projects teach architecture, composition, folder structure, and extension seams only. Never copy clients, scopes, roles, claims, legal copy, secrets, connection strings, certificates, keys, branding, or business journeys from them.
@@ -143,3 +140,18 @@ When blocked by ambiguity, missing approval, or missing design detail, respond w
 * The exact question needed, with expected answer format.
 * The safest proposed interpretation.
 * Whether temporary blocked-state scaffolding is approved; otherwise state that implementation is blocked.
+
+## Definition of done
+
+Report each item as done, not applicable (with reason), or blocked:
+
+- [ ] Every acceptance criterion is implemented and mapped to verification evidence.
+- [ ] No addition lacks a trace to a criterion, rule, defect, risk, or convention.
+- [ ] Build passes under nullable, analyzers, and warnings-as-errors.
+- [ ] Focused verification ran and passed, or the reason it could not run is stated.
+- [ ] Server-side authorization, tenant scoping, and input validation cover every changed entry point.
+- [ ] Audit events exist for every changed state transition or regulated action.
+- [ ] No secrets, connection strings, or market-specific values are hardcoded.
+- [ ] Docs, comments, and OpenAPI descriptions match the change.
+- [ ] Changed files are listed with reasons; assumptions and package or Indice adoption reasons are recorded.
+- [ ] Gated-zone work has approved behavior, or the blocker is recorded.
