@@ -1,0 +1,179 @@
+{
+  "name": "indice",
+  "owner": {
+    "name": "Indice"
+  },
+  "metadata": {
+    "description": "Indice's shared AI skills. Install indice-skills for everything, or pick individual skills."
+  },
+  "plugins": [
+    {
+      "name": "indice-skills",
+      "description": "Every Indice skill in one install.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./common/angular-conventions",
+        "./common/azure-services",
+        "./common/dotnet-conventions",
+        "./common/indice-platform",
+        "./common/indice-web-api",
+        "./instructions/by-bidis/angular-architecture",
+        "./instructions/by-bidis/angular-ux",
+        "./instructions/by-bidis/dotnet-testing",
+        "./instructions/by-bidis/dotnet-web-api",
+        "./instructions/by-bidis/indice-cases",
+        "./instructions/by-bidis/indice-iam",
+        "./instructions/by-bidis/indice-messaging",
+        "./instructions/by-bidis/indice-packages",
+        "./instructions/by-bidis/performance",
+        "./instructions/by-bidis/regulated-integrations",
+        "./instructions/by-bidis/security-owasp"
+      ]
+    },
+    {
+      "name": "angular-conventions",
+      "description": "Angular conventions at Indice: components, structure, state, RxJS, styling.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./common/angular-conventions"
+      ]
+    },
+    {
+      "name": "azure-services",
+      "description": "Which Azure services Indice defaults to and when to pick each.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./common/azure-services"
+      ]
+    },
+    {
+      "name": "dotnet-conventions",
+      "description": "C#/.NET backend conventions at Indice: structure, DI, configuration, logging, errors.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./common/dotnet-conventions"
+      ]
+    },
+    {
+      "name": "indice-platform",
+      "description": "What Indice.Platform provides and when to reach for it before writing new code.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./common/indice-platform"
+      ]
+    },
+    {
+      "name": "indice-web-api",
+      "description": "HTTP endpoint conventions for Indice.Platform feature libraries and product APIs.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./common/indice-web-api"
+      ]
+    },
+    {
+      "name": "angular-architecture",
+      "description": "Angular app shell, routing, runtime config, auth wiring, and the ASP.NET Core UI host.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/angular-architecture"
+      ]
+    },
+    {
+      "name": "angular-ux",
+      "description": "Angular screen design with PrimeNG: structure, component choice, forms, states, accessibility.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/angular-ux"
+      ]
+    },
+    {
+      "name": "dotnet-testing",
+      "description": "Test stack and practices for C#/.NET: xUnit, Testcontainers, WebApplicationFactory, and more.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/dotnet-testing"
+      ]
+    },
+    {
+      "name": "dotnet-web-api",
+      "description": "ASP.NET Core endpoint conventions at Indice, including boundaries and authorization.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/dotnet-web-api"
+      ]
+    },
+    {
+      "name": "indice-cases",
+      "description": "Hosting and extending Indice Cases and workflows.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/indice-cases"
+      ]
+    },
+    {
+      "name": "indice-iam",
+      "description": "Composing Indice IAM for identity, authentication, and authorization.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/indice-iam"
+      ]
+    },
+    {
+      "name": "indice-messaging",
+      "description": "Hosting Indice Messaging: API, management UI, workers, campaigns, templates.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/indice-messaging"
+      ]
+    },
+    {
+      "name": "indice-packages",
+      "description": "Which Indice.* package covers which need, and how to set it up.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/indice-packages"
+      ]
+    },
+    {
+      "name": "performance",
+      "description": "Performance rules for hot paths, EF queries, concurrency, caching, and Angular rendering.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/performance"
+      ]
+    },
+    {
+      "name": "regulated-integrations",
+      "description": "Patterns for integrating with banks, payment gateways, government and other external systems.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/regulated-integrations"
+      ]
+    },
+    {
+      "name": "security-owasp",
+      "description": "OWASP-style security baseline: authorization, tenant isolation, secrets, PII, validation.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./instructions/by-bidis/security-owasp"
+      ]
+    }
+  ]
+}
