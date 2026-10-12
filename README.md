@@ -292,10 +292,34 @@ That is the entire point of this repository: **the agent behaves like an Indice 
 
 ---
 
+## Installing the skills
+
+This repository is a plugin marketplace named `indice` (see `.claude-plugin/marketplace.json`). Claude Code, GitHub Copilot CLI, and Codex all read the same file. You need read access to this repository through your normal git credentials.
+
+**1. Register the marketplace (once per machine)**
+
+| Tool               | Command                                                  |
+| ------------------ | -------------------------------------------------------- |
+| Claude Code        | `claude plugin marketplace add indice-co/Indice.Skills`  |
+| GitHub Copilot CLI | `copilot plugin marketplace add indice-co/Indice.Skills` |
+| Codex              | `codex plugin marketplace add indice-co/Indice.Skills`   |
+
+**2a. Install everything** — the `indice-skills` plugin carries every skill in this repository.
+
+| Tool               | Command                                       |
+| ------------------ | --------------------------------------------- |
+| Claude Code        | `claude plugin install indice-skills@indice`  |
+| GitHub Copilot CLI | `copilot plugin install indice-skills@indice` |
+| Codex              | `codex plugin add indice-skills@indice`       |
+
+**2b. Or pick specific skills** — every skill is also published as its own plugin under the skill's name. Use the same command with that name, for example `claude plugin install indice-web-api@indice`. Browse what is available with `/plugin` (Claude Code), `copilot plugin marketplace browse indice`, or `codex plugin list`.
+
+Install either `indice-skills` or individual skills, not both, otherwise the same skill is loaded twice.
+
 ## Getting started
 
 1. Browse `common/` to see the shared skills available.
-2. In your product repo, install or restore the common skills from the published marketplace/plugin artifact or NuGet package (see Topic 2.2).
+2. Install the skills from the `indice` marketplace (see [Installing the skills](#installing-the-skills)).
 3. Create your **project skills** from `templates/SKILL.template.md` and commit them alongside your code.
 4. Propose improvements to common skills via PR — everyone benefits.
 
