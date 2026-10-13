@@ -1,113 +1,131 @@
 ---
 name: dotnet-testing
 description: >
-  Use when writing, reviewing, or choosing tests for .NET and Angular work:
-  the test stack (xUnit, FluentAssertions, Testcontainers, NetArchTest,
-  Playwright, k6/NBomber), proportional verification, which risk categories
-  need which tests, regulated-path evidence rules, test data, and naming.
+  Use when writing, reviewing, or choosing tests for C#/.NET code: default test
+  stack (xUnit, Testcontainers, WebApplicationFactory), which layer to test at,
+  determinism, fixtures, mocking, architecture tests (NetArchTest), E2E tests
+  (Playwright), load and concurrency tests (k6/NBomber), risk-triggered test
+  categories, test data, and naming.
 ---
 
-# Testing rules
+# .NET testing rules
 
-Verification is the contract that keeps AI output honest. Tests support a production-ready implementation of the approved scope; they never substitute for it.
+Tests support a production-ready implementation of the approved scope; they never substitute for it. Every acceptance criterion maps to proportionate verification evidence. One check may cover several criteria, and it need not be a new automated test.
 
-Every acceptance criterion maps to proportionate verification evidence. One verification may cover several criteria, and it need not be a new automated test. Automated tests are required where they protect material changed behaviour or a regulated, security, authorization, financial, tenant-isolation, idempotency, or state-transition boundary. Infrastructure, configuration, operational, compliance, and governance controls are verified through the system that owns them. Command selection (changed-file, focused-first, no-suite fallback) follows the engineering rules instructions.
+## Scope
+
+Follow the test layers, frameworks, and project layout the repository already uses. Do not introduce a new test type, framework, or test project (architecture, contract, E2E, load) unless the user asks for it or an acceptance criterion requires it. If a needed layer is missing, report the gap instead of creating it.
 
 ## Stack
 
-| Type | Tool | Covers |
+Defaults for new test projects; existing repositories keep their stack.
+
+| Type | Default tool | Use when |
 | --- | --- | --- |
-| Unit | xUnit + FluentAssertions | Domain rules, value objects, validators, pure calculations, state transitions |
-| Integration | xUnit + Testcontainers with real SQL Server | Real database, transactions, middleware, authentication and authorization wiring, serialization, module integration |
-| Contract | xUnit | Actual module, event, or provider contracts |
-| Architecture | NetArchTest or approved architecture tests | New or changed boundary rules; otherwise run the existing suite |
+| Unit | xUnit | Domain rules, value objects, validators, pure calculations, state transitions |
+| Integration | xUnit + `WebApplicationFactory<TProgram>` + Testcontainers | Real database, transactions, middleware, authentication and authorization wiring, serialization |
+| Contract | xUnit | Module, event, or external provider contracts |
+| Architecture | NetArchTest | New or changed boundary rules; otherwise run the existing suite |
 | E2E | Playwright | Required critical journeys or material cross-system risks |
-| Load / concurrency | k6 / NBomber | Defined performance or concurrency requirements, known contention paths, credible introduced races |
+| Load / concurrency | k6 or NBomber | Defined performance or concurrency requirements, known contention paths, credible introduced races |
+
+Licensing: FluentAssertions v8+ and NBomber require commercial licences for company use. Keep whatever assertion library the repository already uses; for new projects use a free alternative (for example AwesomeAssertions or Shouldly) or pin FluentAssertions 7.x.
 
 ## Core rules
 
-* Existing tests or checks may satisfy a criterion when they directly cover the changed behaviour.
-* Do not create production code merely to give a test something to exercise. Do not create tests for behaviour that is not approved, not implemented, and not being implemented in the same task. Do not create synthetic registries, configuration classes, interfaces, adapters, or abstractions merely to encode a checklist in C#.
 * Test behaviour, not implementation details.
-* Use the lowest effective layer that can catch the defect. Use real SQL Server only when SQL mappings, constraints, transactions, database concurrency, or persistence behaviour is part of the risk.
-* Do not duplicate an assertion across layers unless each layer protects a distinct failure mode.
-* Regulated calculations (fees, tax, limits, settlement amounts, allocation) should be pure. Test approved examples, meaningful boundaries, and materially distinct equivalence classes with evidence-backed expected values. Exhaustive testing only for a small finite input domain or when explicitly required.
-* Tests are deterministic: control the clock, identifiers, and randomness; never rely on wall-clock time; never call live external services. Use provider fakes, local test doubles, signed test webhook fixtures, or contract fixtures for PSP, KYC, AML, SMS, email, Viber, notification, and tax-provider integrations.
-* Do not chase coverage percentage. Coverage is diagnostic; it never drives production-code creation, test creation, or retention of useless tests.
-* Tests may be written before, alongside, or after implementation. Sequence is not a compliance gate.
-* Do not test trivial records or DTO storage, generated code, compiler or framework guarantees you do not customize, private implementation details, logging call counts, or combinatorial invalid inputs made unreachable by centralized validation.
-* If test changes materially exceed implementation, consolidate duplicates and name the distinct risk each remaining test family protects. No rigid line-count ratio.
-* An irrelevant risk category is marked `N/A` with a short concrete rationale instead of boilerplate tests.
+* Use the lowest effective layer that can catch the defect. Do not duplicate an assertion across layers unless each layer protects a distinct failure mode.
+* Existing tests may satisfy a criterion when they directly cover the changed behaviour.
+* Do not create production code, interfaces, or abstractions only to give a test something to exercise. Do not test behaviour that is not implemented or being implemented in the same task.
+* Keep business calculations pure. Expected values come from the specification or approved examples, never from re-running the code under test. Cover approved examples, boundaries, and distinct equivalence classes, not every permutation.
+* Tests are deterministic: control the clock, identifiers, and randomness; never call live external services.
+* Do not test trivial records or DTOs, generated code, framework guarantees you do not customize, private members, or logging call counts.
+* Coverage is diagnostic; never write or keep tests to hit a percentage.
+* Tests may be written before, alongside, or after implementation.
+* If test changes materially exceed the implementation, consolidate duplicates and name the distinct risk each remaining test family protects.
+* Mark an irrelevant risk category `N/A` with a short concrete rationale instead of adding boilerplate tests.
+* Before writing new test helpers, check the `indice-platform` skill for existing ones.
 
-## Regulated assertions need a traceable basis
+## .NET practices
 
-AI may write test scaffolding and ordinary test bodies, but the expected value of a regulated calculation or decision must come from an approved example, an architecture decision, legal, compliance, or tax-advisor input, or an authoritative source. The same agent must not invent both the regulated behaviour and its expected result. The PR identifies the source of the assertions, and the implementation must not exceed the approved cases.
+* Time: inject `TimeProvider` and use `FakeTimeProvider` (`Microsoft.Extensions.TimeProvider.Testing`) in tests. No `DateTime.Now` / `UtcNow` in code under test.
+* API integration tests run in-process with `WebApplicationFactory<TProgram>`; replace dependencies with `ConfigureTestServices`.
+* Do not use the EF Core InMemory provider to test persistence behaviour; use the real provider through Testcontainers. Reset data between tests (for example with Respawn) or isolate data per test.
+* Share expensive setup through `IClassFixture<T>` / `ICollectionFixture<T>` with `IAsyncLifetime`. Avoid static or shared mutable state; xUnit runs test classes in parallel.
+* Prefer fakes over mocks, and mock only boundaries you own. For outbound HTTP, stub `HttpMessageHandler` or use WireMock.Net; do not mock `HttpClient`.
+* Use fakes or recorded contract fixtures for external providers (payments, identity, messaging, email/SMS); never live credentials.
+* Async tests return `Task`; no `async void`, `.Result`, or `.Wait()`.
+* Use `[Theory]` with `InlineData` / `MemberData` for equivalence classes and boundaries.
+* Capture logs with `ITestOutputHelper` or `FakeLogger<T>` for diagnostics, not to assert call counts.
 
-For behaviour that is not yet approved: do not write executable tests for imagined behaviour, and do not implement the logic that would make them pass. Appropriate outputs are documentation, contracts expressed as documentation, design proposals, open questions, implementation options, non-executable examples, risk assessments, and explicit stop conditions. When blocked, state it as:
+## Architecture tests (NetArchTest)
 
-```text
-regulated zone — awaiting approval
+* Encode only boundary rules the architecture actually defines: layer dependencies (domain does not reference infrastructure or ASP.NET Core), module isolation, and visibility conventions. Do not encode style preferences or checklists.
+* Add or change a rule only when a boundary rule is introduced or changed; otherwise run the existing suite.
+* One rule per test. On failure, report the offending types.
+
+```csharp
+var result = Types.InAssembly(typeof(Order).Assembly)
+    .That().ResideInNamespace("MyApp.Domain")
+    .ShouldNot().HaveDependencyOn("Microsoft.EntityFrameworkCore")
+    .GetResult();
+
+Assert.True(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
 ```
 
-A regression test may precede a fix only when the production path exists, the defect is real and reproducible, the required behaviour is approved, and the test exercises the real affected seam.
+## E2E tests (Playwright)
+
+* Only for required critical journeys (for example sign-in and the product's core flow) or a material cross-system risk. Edge cases belong in lower layers; keep the suite small.
+* Use `Microsoft.Playwright` when the E2E suite lives in the .NET solution; follow the repository if it already uses `@playwright/test`.
+* Locate by role, label, or test id (`GetByRole`, `GetByLabel`, `GetByTestId`), not CSS or XPath. Use auto-waiting assertions (`Expect(locator).ToBeVisibleAsync()`); never fixed delays.
+* Each test creates its own data and does not depend on execution order.
+* Authenticate once and reuse the stored state; only the sign-in test goes through the login UI.
+* Run against a dedicated test environment with test accounts, never production or real users. Keep traces and screenshots for failures only.
+
+## Load and concurrency tests (k6 / NBomber)
+
+* Only for defined performance or concurrency requirements, known contention paths, or credible introduced races.
+* Every load test declares pass/fail thresholds (for example p95 latency and error rate) through k6 `thresholds` or NBomber assertions. No threshold, no test.
+* Prefer k6 for HTTP-level load. Use NBomber when the scenario needs .NET code (in-process clients, non-HTTP protocols), subject to its licence.
+* Run against an isolated, production-like environment with synthetic data and stubbed external providers. Never against production or shared environments without agreement.
+* Keep load tests out of the regular CI test run; run them on demand or on a schedule.
+* For a race on one specific path, a focused integration test that fires parallel requests (`Task.WhenAll`) against a real database is usually enough; reserve load tools for throughput and latency.
 
 ## Risk-triggered categories
 
-Apply each category only when the change introduces, changes, or materially exposes that behaviour and no directly relevant shared test already covers it.
+Apply each category only when the change introduces, changes, or materially exposes that behaviour and no existing test already covers it.
 
-**Money, payments, ledger** (money, payment, webhook, ledger, reversal, balance, or rounding changes)
-* A duplicate PSP webhook does not create duplicate orders or ledger postings. A late webhook is handled safely. A failed webhook does not create paid orders. An invalid signature is rejected.
-* The ledger is append-only; a reversal posts a new fact. Totals and balances derive correctly from ledger facts.
-* Money always includes currency; rounding and precision use approved expected values.
-
-**Lifecycle state boundaries** (guarded state machines)
-* Transitions are guarded; invalid transitions are rejected; a locked or closed record changes only through approved operations.
-* Lifecycle state is tenant aware where relevant.
-* Selection, fairness, randomness, or weighting logic is tested only against approved, evidence-backed expected behaviour.
-
-**Eligibility and customer protection** (eligibility, caps, limits, or KYC/AML changes)
-* An excluded or ineligible customer cannot purchase or initiate payment. Configured caps and limits are enforced server-side. KYC/AML gates block regulated actions.
-* Gates apply to API, batch, and callback paths, not only the UI.
-
-**Authorization and tenant isolation**
-* Back-office actions require the correct role or permission; unauthorized access is blocked server-side.
+**Authorization**
+* Protected operations reject unauthorized callers server-side.
 * Test `401` and `403` separately only when both are reachable and the distinction is material.
-* A user from one tenant cannot access or modify data of another tenant. Direct object reference attempts are rejected.
-
-**Configuration**
-* Rule changes affect only the intended tenant scope.
-* Defaults are safe. Missing configuration fails safely and never silently enables regulated behaviour.
-
-**Audit and evidence** (state, regulated decisions, permissions, configuration, financial lifecycle, consent, or evidence changes)
-* State changes, regulated actions, and permission and configuration changes emit audit events containing actor, tenant, timestamp, correlation ID, and target reference where relevant.
-* Consent, legal-copy, financial, KYC/AML, tax, and reporting evidence is immutable where required.
+* In multi-tenant systems, one tenant cannot read or modify another tenant's data, including through direct object references.
 
 **API behaviour**
-* Responses are DTOs, not entities. ProblemDetails for errors. List endpoints paginated; filtering and sorting behave as specified. Validation failures return the expected shape and status. Sensitive existence checks respect anti-enumeration.
-* Do not automatically add separate unauthenticated, forbidden, cross-tenant, empty, boundary, pagination, and ProblemDetails tests for every endpoint; apply each only when relevant.
+* Responses are DTOs, not entities. Errors use ProblemDetails. Validation failures return the expected shape and status. Pagination, filtering, and sorting behave as specified. Sensitive existence checks respect anti-enumeration.
+* Do not add unauthenticated, forbidden, empty, boundary, pagination, and ProblemDetails tests to every endpoint; apply each only when relevant.
 
-**UI behaviour**
-* Cover custom component or state behaviour that can regress; do not test Angular, the component library, the browser, or generated-client behaviour you do not customize.
-* Loading, error, and success apply to asynchronous screens; empty, forbidden, not-found, pending, or partial only when reachable.
-* The UI does not rely on hidden or disabled controls for security; regulated decisions are confirmed by server responses.
-* Playwright only where a critical journey is required or a material cross-system risk warrants it.
+**State transitions**
+* Invalid transitions are rejected; guarded states change only through allowed operations.
 
-**Concurrency and idempotency** (defined concurrency behaviour, known contention or retry paths, credible race risks)
-* Concurrent purchases near a capacity threshold do not corrupt ledger facts or exceed approved allocation limits.
-* Concurrent webhooks are idempotent; retries do not duplicate state changes; event handlers are safe to reprocess; out-of-order callbacks are handled safely.
+**Idempotency and concurrency**
+* Retries and duplicate messages do not duplicate state changes; handlers are safe to reprocess; out-of-order messages are handled safely.
+* Concurrency tests only for defined requirements, known contention paths, or credible introduced races.
+
+**Configuration**
+* Missing or invalid configuration fails safely and never silently enables behaviour.
 
 ## Test data
 
-Minimal, synthetic, sanitized. No real personal data, payment data, production secrets, or live provider credentials. Prefer builders or fixtures that make tenant scope visible. Avoid hidden defaults that make regulated tests look simpler than production.
+Minimal, synthetic, sanitized. No real personal data, production secrets, or live credentials. Prefer builders or fixtures that make the relevant state visible. Avoid hidden defaults that make tests look simpler than production.
 
 ## Naming
 
-Readable over clever: `Method_State_ExpectedResult`, or a clear Given / When / Then body for scenario-heavy tests. Every test carries runner-visible intent metadata (for example an xUnit `DisplayName`) saying what it verifies and why it matters.
+Readable over clever: `Method_State_ExpectedResult`, or a clear Given / When / Then body for scenario-heavy tests. Add an xUnit `DisplayName` only when the method name cannot express the intent.
 
 ```text
-PurchaseOrder_CustomerIsExcluded_ReturnsForbidden
-HandleWebhook_DuplicatePaymentConfirmation_DoesNotCreateDuplicateLedgerPosting
-LockRecord_TargetNotReached_ReturnsValidationError
-GetPayments_UserFromDifferentTenant_ReturnsForbidden
-CalculateFee_ApprovedExample_ReturnsExpectedAmount
+CreateOrder_QuantityIsZero_ReturnsValidationProblem
+GetOrder_OrderBelongsToAnotherUser_ReturnsNotFound
+Submit_AlreadySubmitted_ReturnsConflict
+HandleMessage_DuplicateMessageId_ProcessesOnce
+CalculateDiscount_ApprovedExample_ReturnsExpectedAmount
 ```

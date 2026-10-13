@@ -1,5 +1,8 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
+# OS noise
+.DS_Store
 
-/.vs
+# Eval run outputs: generated code and score records produced by a run.
+# Kept locally so a run can be re-scored, not pushed. See evals/*/README.md for
+# what to record in the results table instead.
+evals/*/runs/
+.vs

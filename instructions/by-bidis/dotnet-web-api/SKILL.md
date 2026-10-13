@@ -1,131 +1,216 @@
 ---
 name: dotnet-web-api
 description: >
-  Use when adding or changing ASP.NET Core endpoints: module-owned minimal API
-  route groups, route and versioning shape, DTO-only contracts, HTTP method
-  choice, server-side validation, ProblemDetails and status codes, pagination,
-  idempotency, authorization and scoping, external callbacks and webhooks,
-  audit and logging, and cross-module access.
+  Use when writing or reviewing ASP.NET Core HTTP endpoints at Indice, either in an
+  Indice.Platform feature library or in a product API built on one: the
+  Api/Handlers/Service split, routes, TypedResults, ResultSet paging, validation,
+  endpoint filters, OpenAPI metadata, errors, request/response boundaries, and
+  authorization. Prefer Indice.Platform primitives over new code.
 ---
+# Web API conventions
 
-# Web API patterns
+## Purpose
 
-Endpoints are module-owned, DTO-only, server-authoritative, paginated, auditable, and tenant-aware.
+Minimal APIs only, organised per resource, with Indice.Platform primitives doing the repetitive work. For generic ASP.NET Core guidance the pinned `dotnet/skills` `dotnet-webapi` baseline applies; this skill records where Indice differs or adds to it (see `## Relationship to dotnet-webapi`).
 
-## Ownership and style
+## Guardrail
 
-* Each module owns its endpoints under its own `Endpoints/` folder and exposes a single registrar, for example `public static IEndpointRouteBuilder MapOrdersEndpoints(this IEndpointRouteBuilder app)`.
-* The API host only calls each module's registrar. It contains no business logic.
-* Default style is minimal API endpoint groups using `RouteGroupBuilder`, one group per module or feature area, with consistent naming, authorization, validation, and error mapping.
-* Controllers only if an architecture decision changes the platform style. Never mix styles without approval.
+Before writing a primitive (a validation filter, a paging wrapper, an exception-to-ProblemDetails mapper, a security-requirement helper), search Indice.Platform for it (see the `indice-platform` skill) and say what you checked. Most already exist and are listed below.
 
-## Routes and versioning
+## Platform conventions are the standard
 
-Preferred shape: `/api/v1/{module}/{resource}`, for example `/api/v1/orders`, `/api/v1/orders/{orderId}`, `/api/v1/backoffice/orders/{orderId}/approve`.
+The conventions below apply everywhere: in a feature library and in a product API built on one. Product APIs legitimately differ in exactly two structural places:
 
-* Include the API version in public routes. Use plural resource names and typed route parameters.
-* Do not expose internal table names or module internals.
-* Action-style routes only for commands that do not map cleanly to resource updates, such as `/approve`, `/cancel`, `/submit-for-review`.
-* Keep back-office routes distinct where the permission model and response shape differ from customer-facing routes.
+* **Group prefix is a literal.** A feature library is mapped into someone else's host, so its prefix must be relocatable. A product API is the only consumer of its own routes, so a literal is correct.
+* **Namespace is project-local.** Feature libraries declare route mappers in `namespace Microsoft.AspNetCore.Routing` so a consuming host gets `routes.MapX()` without a using. A product API mapping its own routes does not need it.
 
-## Requests and responses
+A product's own fine-grained authorization model is fine where Platform has no equivalent.
 
-DTOs only. Never accept or return EF entities, domain entities, persistence models, provider SDK models, unfiltered external callback payloads, or internal exception types.
+Everything else that differs is drift, not a second convention (see `## Known drift in product APIs`). "The file next to it does X" is not by itself a justification for X.
 
-* Project explicitly at the API boundary.
-* Request DTOs contain only client-supplied fields; response DTOs contain only approved contract fields. No over-posting.
-* Do not accept server-owned fields from the client: status, tenant ID, fee or tax amounts, KYC decisions, audit fields, ledger facts. Server-authoritative values are calculated, resolved, or confirmed server-side.
-* OpenAPI is the source of truth for generated clients. Every endpoint has a summary and description.
-* Keep DTOs versioned and backward-compatible once consumed.
+## Anatomy of an endpoint
+
+Per route group:
+
+* `<Resource>Api.cs` declares the route group and the `Map*` calls, nothing else. `internal static class`; in a feature library, declared in `namespace Microsoft.AspNetCore.Routing`.
+* `<Resource>Handlers.cs` is an `internal static class` of thin handler methods that call the service and translate its result to a response. No business logic, LINQ, or `DbContext` in handlers.
+* `I<Something>Service` owns the logic, **one per route group**, not one per entity. The same entity served to two audiences gets two services (Cases: `IAdminCaseService` for the back-office group, `IMyCaseService` for the current-user one).
+* `<Request>Validator.cs`, one per request type, in its own file under `Validators/` (or `<Area>/Validation/`).
+
+Never inline a lambda into a `MapGet`/`MapPost`; the route declaration always names a method.
+
+> **Do not copy the older Identity handlers.** Some inject a `DbContext` straight into the handler and run LINQ there. Follow Messages, Cases, or Agents instead.
+
+## Routes and naming
+
+* Kebab-case, plural nouns (`distribution-lists`, `payment-methods`). `my/` prefixes a current-user resource, `manage/` a back-office one (`manage/cases`).
+* Sub-resources nest under the parent id (`{caseId}/attachments/{attachmentId}`). Non-CRUD actions are a verb segment (`{userId}/block`, `{campaignId}/publish`).
+* Route parameters are always `{<entity>Id}`, never a bare `{id}`, including in `CreatedAtRoute` route values. Leave the type off the route (`{caseId}`, not `{caseId:guid}`); add a constraint only where the handler does not type the parameter.
+* Do not expose table names or internal structure in routes. Follow the repository's existing versioning scheme; do not introduce one in passing.
+
+```csharp
+// Feature library: never a literal, the host must be able to relocate it.
+var options = routes.ServiceProvider.GetRequiredService<IOptions<MessageManagementOptions>>().Value;
+var group = routes.MapGroup(options.PathPrefix.TrimEnd('/') + "/distribution-lists");
+
+// Product API: a literal is correct. Do not invent IOptions plumbing for one consumer.
+var group = builder.MapGroup("manage/invoices");
+```
+
+Each area gets an aggregator that composes the group mappers in order (`MapCases()`, `MapMessaging()`). The host calls the aggregator, never the individual mappers.
 
 ## HTTP methods
 
-| Method | Use for |
-| --- | --- |
-| `GET` | Read-only retrieval |
-| `POST` | Commands, creation, non-idempotent intent, external callbacks, operations requiring an idempotency key |
-| `PUT` | Full replacement where the client supplies the full approved representation |
-| `PATCH` | Partial update where explicitly supported and validated |
-| `DELETE` | Only where deletion is approved; regulated evidence usually needs cancellation or reversal instead |
+* `GET` is read-only. `POST` creates or runs a command (verb segment). `PUT` replaces the full representation. `PATCH` only where partial update is explicitly supported and validated.
+* `DELETE` only where deletion is allowed. When records must be kept, use an explicit command (`{orderId}/cancel`) instead.
 
-For regulated and financial records, prefer explicit commands over destructive updates, for example `POST /api/v1/payments/callbacks/{provider}` or `POST /api/v1/orders/{orderId}/approve`.
+## Requests and responses
 
-## Validation
+* Accept and return API models, never EF entities, persistence models, provider SDK models, raw callback payloads, or exception types. Project in the service.
+* Request models contain only client-supplied fields. Never accept server-owned values (status, owner or tenant, audit fields, calculated amounts); resolve or compute them server-side. No over-posting.
+* Once generated clients consume a contract, change it only in backward-compatible ways; renames and removals are breaking.
 
-Server-side validation is the source of truth; UI validation is convenience. Use FluentValidation or the approved approach. Validate input shape, allowed values, state transitions, tenant scope, command permissions, and idempotency key presence where required. Never trust client-provided calculations or eligibility flags. Failures return ProblemDetails with field-level errors where possible.
+## Return types
 
-## Errors
+**`TypedResults` only.** Not `Results.Ok(...)`, not `IResult`, not `IActionResult`. No controllers.
 
-All errors use ProblemDetails in one consistent shape.
+Annotate multi-outcome handlers with an explicit union:
 
-| Status | Meaning |
-| --- | --- |
-| `400` | Malformed or invalid request shape |
-| `401` | Unauthenticated |
-| `403` | Authenticated but forbidden |
-| `404` | Not found, where revealing absence is allowed |
-| `409` | State conflict, concurrency conflict, duplicate command, invalid state transition |
-| `422` | Semantically valid request failing business validation, only if adopted consistently |
-| `429` | Rate limited |
-| `500` | Unexpected server failure only |
+```csharp
+Task<Results<NoContent, NotFound, ValidationProblem>>
+Task<Results<NoContent, NotFound>>
+Task<Results<Ok<T>, NotFound>>
+```
 
-Include `type`, `title`, `status`, `detail` where safe, a `traceId` or correlation reference, and field errors for validation. Never leak secrets, raw provider errors, internal exception details, sensitive PII, or whether a sensitive record exists when anti-enumeration applies.
+Created responses use the route name, never a hand-built URL: `TypedResults.CreatedAtRoute(list, nameof(GetDistributionListById), new { distributionListId = list.Id })`.
 
 ## Lists
 
-Pagination is mandatory. Page-based for back-office grids; cursor-based for high-volume feeds or event-style lists. Every list endpoint defines default and maximum page size, allowed sort and filter fields (allow-lists, never arbitrary client field names bound into queries), default sort, response shape, and total-count behaviour. Filtering and sorting are server-side. Never return all rows for client-side filtering.
+`ResultSet<T>` (`{ Count, Items }`) is the default for any collection that can grow, **including a sub-collection of one parent**. Bind `[AsParameters] ListOptions` (and `[AsParameters]` filters, combined with `ListOptions.Create(options, filter)`), and page with `ToResultSetAsync` in the service.
+
+A plain `List<T>` is only for sets fixed by definition (a settings list, an enum-like lookup). If in doubt, page it. Never return an unpaged `List<T>` from something searched or filtered.
 
 ```csharp
-public sealed record PagedResult<T>(IReadOnlyList<T> Items, int PageNumber, int PageSize, int? TotalCount, bool HasNextPage);
-public sealed record CursorResult<T>(IReadOnlyList<T> Items, string? NextCursor, int PageSize);
+public static async Task<Ok<ResultSet<DistributionList>>> GetDistributionLists(
+    IDistributionListService distributionListService,
+    [AsParameters] ListOptions options,
+    [AsParameters] DistributionListFilter filter) {
+    var lists = await distributionListService.GetList(options, filter);
+    return TypedResults.Ok(lists);
+}
 ```
 
-Check `Indice.EntityFrameworkCore` result-set helpers before writing paging code (see the `indice-packages` skill).
+Paging safety, enforced in the service:
 
-## Idempotency
+* `ListOptions.Size` has no maximum. Clamp it.
+* `Sort` and `FilterClause` member paths are translated into expressions as-is. Allow-list them, and map API names to entity paths with `AddSortRedirect`. Never bind arbitrary client field names into queries.
+* Define a stable default sort. Project before paging. Never return all rows for client-side filtering.
 
-Required for non-GET money operations, order or purchase operations, ledger postings, state lock or close commands, external callbacks, webhooks, provider callback processing, and retryable event handlers.
+## Group and endpoint metadata
 
-* Require an idempotency key wherever the client or provider can retry.
-* Store the outcome where needed and return the same outcome for duplicate equivalent requests.
-* Reject duplicate keys with conflicting payloads.
-* Handle late and out-of-order callbacks safely.
-* Never create duplicate orders, payments, ledger postings, audit records, or state transitions.
+The OpenAPI document generated from this metadata is what NSwag turns into TypeScript clients, so missing metadata ships as a broken client.
+
+On the group: `.WithGroupName(...)`, `.WithTags(...)`, `.RequireAuthorization(...)`, `.WithOpenApiSecurityRequirement("oauth2", allowedScopes)`, and the `.ProducesProblem(...)` codes every endpoint in it can return (401/403/500).
+
+On each endpoint:
+
+* `.WithName(nameof(Handlers.TheMethod))`, always `nameof`. This is what makes `CreatedAtRoute` safe.
+* `.WithSummary("...")` on every endpoint; `.WithDescription(...)` where a longer description exists.
+* `.Produces<T>(...)` only for responses the signature cannot express (file downloads, alternate content types).
+
+## Validation
+
+Server-side validation is the source of truth; UI validation is convenience. Never trust client-provided calculations or flags.
+
+* `.WithParameterValidation<TRequest>()` on the endpoint. It adds the filter **and** registers `ProducesResponseType(400, HttpValidationProblemDetails)`; do not add that yourself.
+* FluentValidation is the standard: `public class <Request>Validator : AbstractValidator<TRequest>`, registered with `services.AddEndpointParameterFluentValidation(typeof(X).Assembly)`.
+* The filter falls back to DataAnnotations (MiniValidator) when no validator is registered. Check which mechanism a request already uses. Do not stack both: annotations silently stop running once a validator resolves.
+
+## Endpoint filters
+
+Never call `AddEndpointFilter` directly. Wrap the filter in a `With*` convention extension that also registers the response metadata it produces, as `WithParameterValidation<T>`, `WithHandledException<TException>`, `WithOpenApiSecurityRequirement(...)`, and `LimitUpload(...)` do. A raw `.AddEndpointFilter<T>()` is why some groups carry a hand-written `.ProducesProblem(...)` list that drifts out of sync.
+
+## Errors
+
+Services throw `BusinessException(message, code, errors)`. The group declares `.WithHandledException<BusinessException>()`, which converts it to a `400` `ValidationProblem` carrying `extensions["code"]`. Handlers do not try/catch.
+
+```csharp
+group.WithHandledException<BusinessException>()
+     .ProducesProblem(StatusCodes.Status401Unauthorized)
+     .ProducesProblem(StatusCodes.Status500InternalServerError);
+```
+
+* Missing resources return `TypedResults.NotFound()` through the handler's union.
+* `BusinessException` always maps to `400`. For a state or concurrency conflict that must be `409`, return `Conflict` in the union or throw a dedicated exception type handled with `WithHandledException<TException>(StatusCodes.Status409Conflict)`.
+* Never leak secrets, raw provider errors, exception details, or PII. Where revealing that a record exists is unsafe, return `404` rather than `403`.
+
+> **Do not mix this into a group that does not have it.** A `BusinessException` in a group without `.WithHandledException<BusinessException>()` reaches the host exception handler, and the client gets a `500` with no error code. Convert a whole group or leave it alone.
 
 ## Authorization
 
-Enforced server-side per endpoint using Indice IAM scopes, roles, policies, and claims through approved patterns (see the `indice-iam` skill).
+* Authorize server-side on the group with `.RequireAuthorization(...)`; chain a second `.RequireAuthorization(...)` on an endpoint to tighten it. Use Indice IAM scopes and policies (see the `indice-iam` skill).
+* Check resource ownership in the service and reject direct-object-reference attempts.
+* In multi-tenant systems, resolve tenant and user scope from the authenticated context, never from client input.
+* Hidden or disabled UI is not authorization; the endpoint always authorizes the submitted action.
 
-* Apply endpoint-level policies; check resource ownership and tenant scope where relevant.
-* Reject direct-object-reference attempts. Sensitive lookups respect anti-enumeration.
-* Never rely on the UI to hide unauthorized actions. For back-office APIs, return server-confirmed capabilities or allowed actions for UI rendering; the endpoint still authorizes the submitted action.
+## Retries and callbacks
 
-## Scoping
+Apply when the operation has side effects and the client or a provider can retry it.
 
-Scope data access by tenant where relevant.
+* Require an idempotency key. Return the same outcome for a duplicate equivalent request; reject a reused key with a different payload.
+* Treat external callbacks and webhooks as hostile until verified: signature check, plus timestamp or replay protection where the provider supports it. Keep provider models in infrastructure (see the `regulated-integrations` skill).
 
-* Never trust client-provided tenant values without authorization and server-side resolution. Resolve tenant and user scope from authenticated context.
+## Host defaults
 
-## External callbacks and webhooks
+`IndiceWebApplicationBuilder.CreateBuilder(args)` calls `AddMinimalApiDefaults()`: camelCase JSON with the Indice converters, `JsonStringEnumConverter`, ProblemDetails with `requestId`/`traceId`, JWT and introspection auth, CORS, localization, and the FluentValidation scan of the entry assembly. `AddWebServiceDefaults()` adds OpenTelemetry, health checks, and HTTP resilience.
 
-Treat as hostile until verified: signature verification; timestamp and replay protection where the provider supports it; idempotency; safe logging; raw payload handling per approved evidence rules; provider-specific mapping isolated in infrastructure; no direct mutation of another module's tables; audit events for accepted state changes; a dead-letter or manual-review path where relevant. Never expose provider SDK models outside the owning module.
+Do not reconfigure any of that inside a feature library or a per-feature extension. A feature that needs different JSON behaviour is a conversation about the default, not a local override.
 
-## Audit and logging
+## Known drift in product APIs
 
-State-changing and regulated endpoints emit audit events. Use structured logging with a correlation ID and safe metadata only. Never log secrets, tokens, credentials, raw payment data, unnecessary PII, or sensitive regulatory evidence. Log external provider references only if approved and non-sensitive.
+Shapes found in product repos that contradict the rules above. Write new code the Platform way; where a row says a change cannot be made piecemeal, leave existing code alone rather than half-converting it.
 
-## Cross-module behaviour
+| You will see                                                                                                                                           | Follow instead                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Routes and handlers in one`<Feature>Endpoints.cs`, sometimes over a thousand lines                                                                   | Split into`<Resource>Api.cs` + `<Resource>Handlers.cs` + service. For a **new resource or file**, always split. For **one endpoint added to an existing single-file group**, match the file and note in the PR that it is a split candidate. |
+| Services returning a result object (`Success`, `ErrorCode`, `ErrorMessage`) unpacked by hand and mapped through a custom problem-details factory | `BusinessException` + `.WithHandledException<BusinessException>()`. Convert a whole group or none (see `## Errors`).                                                                                                                                   |
+| `.AddEndpointFilter<SomeFilter>()` directly on a group                                                                                               | A`With*` extension that also registers the filter's status codes.                                                                                                                                                                                          |
+| `List<T>` from a collection that can grow, including a child collection                                                                              | `ResultSet<T>` with `ListOptions`. Safe to fix, but breaking for generated clients, so flag it.                                                                                                                                                          |
+| DataAnnotations on the request instead of a validator class                                                                                            | FluentValidation for new validation. Do not stack both; if you change mechanism, remove the other.                                                                                                                                                           |
+| Back-office groups under`admin/`, or bare `{id}` parameters                                                                                        | `manage/` and `{<entity>Id}` for new groups and routes. Renaming existing routes breaks clients; leave them.                                                                                                                                             |
+| Endpoints without`.WithSummary(...)`                                                                                                                 | Add it. It lands in the generated client.                                                                                                                                                                                                                    |
 
-Endpoint ownership follows module ownership. When an endpoint needs another module's data or behaviour, use that module's contracts interface or an approved integration event. Never query its tables, inject its DbContext, expose its internal DTOs, or duplicate its rules.
+## Relationship to `dotnet-webapi`
 
-## Checklist
+`dotnet/skills`' `dotnet-webapi` is the assumed baseline. Where it conflicts with the table below, this skill wins.
 
-* Registered by its owning module; the host only wires the registrar.
-* Route follows the versioned pattern; request and response are DTOs with no entity, persistence, or provider model exposed.
-* Server-side validation present; ProblemDetails for errors with nothing sensitive leaked.
-* Lists paginated, capped, and allow-listed for filtering and sorting.
-* Idempotency for money, state-changing, callback, and retryable operations.
-* Server-side authorization with ownership and tenant checks; direct-object-reference rejected; anti-enumeration respected.
-* `CancellationToken` flows through async paths.
-* Audit events for state-changing and regulated endpoints; structured logging with correlation ID.
-* OpenAPI updated and generated clients still valid.
+| `dotnet-webapi` says                                                       | At Indice                                                                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `CancellationToken` on every endpoint                                      | Only where it is actually forwarded downstream                                             |
+| `TypedResults.Created($"/api/x/{id}", ...)`                                | `TypedResults.CreatedAtRoute(model, nameof(GetEntityById), new { entityId = model.Id })` |
+| A`.http` file per project                                                  | Not an Indice practice                                                                     |
+| Fall back to untyped`Results` past ~7 branches                             | Never. Annotate the union or split the endpoint                                            |
+| `{Entity}ListResponse` for collections                                     | `ResultSet<T>` of the API model                                                          |
+| One static class per resource with`Map<Resource>(this WebApplication app)` | Extension on`IEndpointRouteBuilder`, routes split from handlers across two files         |
+
+## Records
+
+Use records for new data-carrying types: request and response models, events, commands, service results. Positional records where the type is small (`public record CreateFolderResponse(Guid FolderId);`). Most existing Platform DTOs are classes for historical reasons; do not copy that shape into new code, and do not convert an existing class to a record in passing (it changes equality semantics).
+
+## Do / Do not
+
+* **Do** name the endpoint `nameof(TheHandler)` and let `CreatedAtRoute` use it.
+* **Do** put the `.ProducesProblem(...)` codes on the group, once.
+* **Do** check which validation mechanism a request already uses before adding one.
+* **Do** clamp page size and allow-list sort and filter fields.
+* **Do not** inline a lambda into a route declaration.
+* **Do not** put business logic, LINQ, or a `DbContext` in a handler.
+* **Do not** return `IResult`, `IActionResult`, untyped `Results.*`, or EF entities.
+* **Do not** hardcode a group prefix in a feature library, or plumb an `IOptions` prefix through a product API with no second consumer.
+* **Do not** reconfigure JSON, auth, CORS, or ProblemDetails inside a feature.
+* **Do not** log secrets, tokens, or unnecessary PII.
+* **Do not** treat a pattern as correct because the file next to it does it; check `## Known drift in product APIs` first.
+
+## Examples
+
+The reference implementation is Messages' distribution lists in Indice.Platform: `Endpoints/DistributionListsApi.cs` (the surface) and `Endpoints/DistributionListsHandlers.cs` (thin handlers over `IDistributionListService`). `Indice.Features.Cases.Server`'s `AdminAccessRulesApi.cs` shows per-endpoint authorization overrides on a group policy. Prefer these over a file in a product repo when you need a model to copy.
