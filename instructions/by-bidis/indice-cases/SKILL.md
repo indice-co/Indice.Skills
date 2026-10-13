@@ -1,93 +1,139 @@
 ---
 name: indice-cases
 description: >
-  Use when a task touches Indice Cases or workflows: hosting the Cases server,
-  UI, and workflow designer, case types, checkpoints, access rules, workflow
-  definitions, custom activities, extension endpoints, or the Cases IAM and
-  database setup. Defines the host boundary, what the package owns, and what
-  must never be copied from reference projects.
+  Use when an application integrates with an existing Indice Cases deployment:
+  letting signed-in customers browse case types and create, fill in, submit,
+  attach files to and track their own cases through the My API, or letting
+  back-office users and integrations work cases (assign, edit, approve, comment,
+  trigger actions, search, report) through the Manage API. Defines the API
+  contracts, IAM scopes, client setup, boundaries and what must never be
+  duplicated. For creating or hosting a Cases service, use the
+  `indice-templates` skill instead.
 ---
 
-# Indice Cases and workflows
+# Indice Cases integration
 
-## Boundary
+This skill covers **consuming** Indice Cases. It does not cover hosting it.
+To scaffold a Cases host, use the `indice-templates` skill (`indice.cases`).
 
-Cases and workflow are a platform capability, not logic buried inside a regulated business module. Adopting them is an explicit, approved decision that must resolve: workflow designer access, case-management API and UI, workflow definitions, the actor model, evidence, callbacks, SLA, retention, and operational ownership. Until that decision exists, do not introduce a Cases host, case types, workflow definitions, workflow-driven maker-checker, or workflow-driven regulated decisions.
+## Contracts
 
-Indice packages own core Cases persistence, APIs, UI assets, workflow runtime, and generated workflow infrastructure. The application owns thin adapters, approved extension endpoints, and module contracts.
+The OpenAPI documents next to this file are the source of truth. Generate clients from them; do not hand-write DTOs.
 
-## Host composition
+| Spec | Consumer | Base path | Flow | Scope |
+|---|---|---|---|---|
+| [cases-my.json](cases-my.json) — *My cases API* | Signed-in customers (web, mobile, BFF) | `/api/my` | OAuth2 authorization code + PKCE | `cases` |
+| `/api/manage` | Authorization code + PKCE (users); **client credentials (machine-to-machine)** | `cases` |
 
-A standalone ASP.NET Core host composes `Indice.Features.Cases.Server`, `Indice.Features.Cases.UI`, and `Indice.Features.Cases.Workflows`. The `indice.cases` template is the baseline (`dotnet new indice.cases -n <Scratch> --Framework net10.0`, generated into a scratch location, never over existing source).
+- The `servers`, `authorizationUrl` and `tokenUrl` values in the specs (`cases.indice.gr`, `my.indice.gr`) are examples only. Read the Cases base URL and the IAM authority from configuration for each environment.
+- The Manage API supports machine-to-machine access with client credentials, even though the spec only shows the authorization code flow. Use a dedicated client approved in IAM (see `indice-iam`), and give it only the access rules it needs.
+- Every error response is a `ProblemDetails`. Validation errors (400) are an `HttpValidationProblemDetails`. Handle 401, 403, 404 and 500 explicitly.
 
-Template shape:
+## Case lifecycle
 
-1. `IndiceWebApplicationBuilder.CreateBuilder(args)`, then `AddApplicationLocalization`, `AddApplicationCache`, `AddApplicationOpenApi`.
-2. `AddWebServiceDefaults()` before the Cases calls.
-3. `AddCaseServer(options => options.PathPrefix = "/api")` owns the Cases API surface.
-4. `AddCasesWorkflow` with `RegisterAuthentication = true`; SMTP binds from `Elsa:Smtp`; workflow assembly loading is an explicit opt-in.
-5. Application services and extra health checks after the product calls.
-6. Runtime: `UseCasesWorkflow()`, `UseCasesUI()`, `MapCases()`, OpenAPI, `MapHealthCheckDefaults()`, then local extension endpoints.
+1. **Create a draft:** `POST .../cases` with `CreateDraftCaseRequest`. It needs a `caseTypeCode`; `groupId`, `owner`, `metadata` and `channel` are optional. The response is a `CreateCaseResponse` containing the case `id`.
+2. **Fill in the data:** `PUT .../cases/{caseId}` with `UpdateCaseRequest.data`. The data must match the JSON schema of the case type, which you can get from the case-type endpoints. You can only update a case while it is a draft.
+3. **Attach files:** `POST .../cases/{caseId}/attachments` (`multipart/form-data`). It returns a `CasesAttachmentLink`.
+4. **Submit:** `POST .../cases/{caseId}/submit` takes the case out of draft and starts the workflow.
+5. **Track:** the workflow moves the case through checkpoints. Status is one of `Submitted`, `InProgress`, `Completed`, `Deleted`.
 
-Workflow UI client, required scope, group claim type, authority, host, language, and SMTP are host options, not scattered through feature code. Health checks cover the IAM authority, `CasesDb`, and blob storage when `StorageConnection` is configured.
+Validate `data` against the case type's schema before sending it, and still handle a 400 from the server. The case type's schema and layout define the form; do not hardcode form fields.
 
-Keep application wrappers small and configuration-driven. Prefer package composition and explicit options over copying provider internals.
+## My API (customer)
 
-## IAM contract
+Every call is made as the signed-in customer. The API limits all results and actions to that user's own cases, and ownership comes from the token. Never pass an owner or user ID, and do not filter by owner on the client. For a customer-facing identifier, show `referenceNumber`, not `caseId`.
 
-The template's IAM shape: API scope `cases`; admin UI and workflow designer client `cases-ui` using authorization code flow; identity resources `openid`, `profile`, `email`, `role`, `cases`, `offline_access`; claims on the `cases` scope: `role`, `email`, `name`, `sub`, `given_name`, `family_name`.
-
-Treat these as the template's shape only. Your client IDs, scopes, role names, claims, actor mappings, and designer access come from your own approved IAM security contract (see the `indice-iam` skill).
-
-## Database and migrations
-
-* `CasesDb` backs the Cases provider store.
-* The workflow (Elsa) store key appears as `WorkflowDb` in generated `appsettings.json` and `WorkflowDB` in the README. Match the key the generated host and package option actually use.
-* Migration snippets set the migrations assembly to the host assembly and use separate EF migrations history tables for `CasesDbContext` and `ElsaContext`.
-* Provider-owned Cases and workflow migrations are allowed inside the Cases host boundary. Application-owned regulated schemas still need their own migration review.
-
-## Localization
-
-`AddCaseServer(...)` registers the Cases translation graph and `MapCases(...)` maps translation endpoints: `GET {prefix}/cases-i18n.{lang}.json` and `GET {prefix}/languages`, excluded from OpenAPI and output-cached. The template supports `en` and `el` with `el` as default culture. Non-standard hosts must configure localization resources (`Resources`) before relying on Cases i18n. Override translations through package-supported resource registration, never by copying Angular assets.
-
-## Authorization
-
-* Route groups require authenticated bearer tokens and approved scopes.
-* Administrative extension routes add `RequireCasesAccess(CasesAccessLevel.Manage)`.
-* Customer-facing case routes add ownership checks such as `RequireCasesOwnershipAccess`.
-* Operational searches may add role or system-client assertions on top of scope checks.
-* UI visibility and route guards are never sufficient. Server-side Cases authorization is required. Extra rules go through `AddCaseAuthorizationService<T>`.
-
-## Extension endpoints
-
-Typical thin endpoints around Cases: draft case creation that updates case data and applies access rules; submission and assignment helpers; checkpoint-type and access-rule lookup; current-assignee declaration; customer-owned case list, create, update, submit, attachment, and request-list; external workflow callback and cancel.
-
-Extension endpoints are integration contracts. Each needs explicit DTOs, ProblemDetails, OpenAPI summaries, cancellation tokens, tenant scoping where relevant, server-side authorization, audit expectations, and tests.
-
-## Generated clients and adapters
-
-Keep generated clients under proxy folders (for example `Proxies/Identity`, `Proxies/Cases`) and consume them behind handwritten services or workflow activities. Machine-to-machine calls use client-credentials token management; named `HttpClient` registrations isolate base addresses. Never expose generated or provider models as application domain contracts. Fail closed when a required endpoint, authority, client ID, client secret, or scope is missing.
-
-## Case types, seeds, and workflow definitions
-
-Reference pattern: an `IDbCaseTypeSeed` interface standardizes case type metadata, allowed creator roles, checkpoint types, schema, layout, translations, tags, and config; a hosted seeder discovers seed classes and upserts provider-owned case types and checkpoint metadata; workflow JSON files carry the business journeys, timers, HTTP endpoints, cancellation paths, notifications, checkpoint submissions, and JavaScript or Liquid expressions; deployment uses manual export, import, and publish steps.
+| Operation | Endpoint | Notes |
+|---|---|---|
+| List case types | `GET /api/my/case-types` | Filters: `CaseTypeTags`; paged. |
+| Get case type | `GET /api/my/case-types/{caseTypeCode}` | Schema, layout and translations for rendering the form. |
+| List my cases | `GET /api/my/cases` | Paged. Filters: `Statuses`, `CaseTypeCodes`, `CaseTypeTags`, `Checkpoints`, `CreatedFrom/To`, `CompletedFrom/To`, `ReferenceNumbers`, `Data`, `Metadata`, `IncludeDrafts`, `IncludeData`. |
+| Create draft | `POST /api/my/cases` | `CreateDraftCaseRequest` → `CreateCaseResponse`. |
+| Get case | `GET /api/my/cases/{caseId}` | `Case`. |
+| Update draft | `PUT /api/my/cases/{caseId}` | `UpdateCaseRequest`. |
+| Upload attachment | `POST /api/my/cases/{caseId}/attachments` | `multipart/form-data` → `CasesAttachmentLink`. |
+| Download PDF | `GET /api/my/cases/{caseId}/download` | File. |
+| Submit | `POST /api/my/cases/{caseId}/submit` | Leaves draft mode. |
 
 Rules:
 
-* Case types, workflow definitions, checkpoint states, timers, notifications, and access rules are product behaviour. Never copy or adapt them from a reference.
-* If seeding is adopted, make it deterministic, environment-safe, auditable, and backed by migration and review notes.
-* Workflow definition deployment needs explicit promotion, import/export, publication, rollback, and evidence rules. Treat workflows as auditable product artifacts, not just code. Keep definitions and case types out of source until they are approved, versioned, promotable, and testable.
+- Only ask for `IncludeData=true` when you are going to show the data. The list is lighter without it.
+- Show the customer the `message` and `checkpointType` translations that come back with the case. Do not map internal checkpoint codes to your own wording.
+- For browser apps, keep tokens server-side using a BFF (see `duende-bff`).
 
-## Custom activities
+## Manage API (back office)
 
-Typical activities: an HTTP request activity using named clients and designer inputs; role-assignment validation; notifications to access-rule users and groups.
+What a caller can do depends on Cases **access rules** (role, group, user, case type, checkpoint), not just on the `cases` scope. Before showing actions, always call `GET /api/manage/cases/{caseId}/actions`, and only show what it returns (`hasAssignment`, `hasUnassignment`, `hasEdit`, `hasApproval`, `customActions`).
 
-Activities are executable business and integration logic and must be approved. Named clients, allowed relative URLs, headers, body handling, retry behaviour, failure outcomes, and logging redaction need explicit governance. Activities that call application modules use approved contracts and never reach into another module's internals.
+Working a case:
 
-## Operations
+| Operation | Endpoint | Body |
+|---|---|---|
+| Search cases | `GET /api/manage/cases` | Query: `CaseTypeCodes`, `CheckpointTypeCodes`, `GroupIds`, `OwnerIds`, `OwnerTins`, `ReferenceNumbers`, `AssignedTo`, `From/To`, `Data`, `Metadata`, `IncludeData`; paged |
+| Get case | `GET /api/manage/cases/{caseId}` | `fetchPublicData` query |
+| Create / update / delete draft | `POST /api/manage/cases`, `PUT` and `DELETE /api/manage/cases/{caseId}` | `CreateDraftCaseRequest`, `UpdateCaseRequest` |
+| Initialize draft data | `POST /api/manage/cases/{caseId}/data/init` | — |
+| Submit | `POST /api/manage/cases/{caseId}/submit` | — |
+| Assign to me | `POST /api/manage/cases/{caseId}/assign` | — |
+| Edit (workflow) | `POST /api/manage/cases/{caseId}/edit` | `EditCaseRequest` |
+| Approve / reject | `POST /api/manage/cases/{caseId}/approve` | `ApprovalRequest` (`action`, `comment`); reasons from `GET .../reject-reasons` |
+| Custom action | `POST /api/manage/cases/{caseId}/trigger-action` | `ActionRequest` (`id` taken from `customActions`, `value`) |
+| Comment | `POST /api/manage/cases/{caseId}/comment` | `SendCommentRequest` (`comment`, `privateComment`, `replyToCommentId`) |
+| Patch metadata | `PATCH /api/manage/cases/{caseId}/metadata` | — |
+| Publish private data | `POST /api/manage/cases/{caseId}/publish-private-data` | — |
+| Timeline / related cases | `GET .../timeline`, `GET .../related-cases` | — |
+| Attachments | `GET`/`POST .../attachments`, `GET .../attachments/{attachmentId}`, `GET .../attachments/{fieldName}`, `GET /api/manage/attachments/{attachmentId}/download` | — |
+| PDF | `GET /api/manage/cases/{caseId}.pdf` | — |
 
-Reference hosts use health checks for SQL, the OpenID Connect authority, and blob storage; a Redis cache package; the Azure event dispatcher; a no-op email service; container and CI metadata; and SQL bootstrap material for provider-owned workflow storage. Production providers, storage, event dispatch, SMTP and notification channels, and worker operations require approved security and operations inputs. No checked-in connection strings, secrets, registry names, or production endpoints.
+Administration and supporting endpoints:
+
+- **Case types:** `GET/POST /api/manage/case-types` (`canCreate` filter); `GET/PUT/DELETE /api/manage/case-types/{caseTypeId}`.
+- **Access rules:**
+  - Global: `GET/POST /api/manage/access-rules`, `/batch`, `PUT .../{ruleId}/{accessLevel}`, `DELETE .../{ruleId}`.
+  - Per case: `GET/POST /api/manage/cases/{caseId}/access-rules`, `/batch`, `/replace`.
+- **Lookups and integrations:** `GET /api/manage/lookups/{lookupName}`, `GET /api/manage/integrations/contacts` and `GET /api/manage/integrations/contacts/{reference}`, `GET /api/manage/checkpoint-types`.
+- **User features:** saved queries (`GET/POST /api/manage/queries`, `DELETE .../{queryId}`), notification subscriptions (`GET/POST /api/manage/my/notifications`), reports (`GET /api/manage/reports?reportTag=`).
+
+Rules:
+
+- **Workflow first.** Change a submitted case only through workflow actions: `edit`, `approve`, `trigger-action`, `assign`. Never try to get around a checkpoint by writing data directly.
+- **Configuration is product behaviour.** Creating or changing case types and access rules changes who can see what and how cases flow. Do it only through an approved, audited change, never as a side effect of business code.
+- **PII.** Search results contain owner names, TINs and emails. Never log them, and only request the fields and data you need (`IncludeData=false` by default).
+- **Comments.** Set `privateComment: true` for internal notes that customers must not see.
+
+## Client setup (.NET)
+
+1. Generate typed clients for each spec (for example NSwag or Kiota) and use them behind your own service interfaces. Never expose the generated models as your application's domain contracts.
+2. **User-facing calls (My API, back-office UI):** forward the user's access token from the authenticated session, for example with the BFF or `Duende.AccessTokenManagement` user token handler. Never swap it for a service token.
+3. **Machine-to-machine calls (Manage API):** use a dedicated IAM client with the client credentials grant and the `cases` scope only, with its secret in user-secrets or Key Vault.
+
+```csharp
+builder.Services.AddClientCredentialsTokenManagement()
+	.AddClient("cases", client => {
+		client.TokenEndpoint = new Uri($"{builder.Configuration.GetAuthority(tryInternal: true)!.TrimEnd('/')}/connect/token");
+		client.ClientId = ClientId.Parse(builder.Configuration.GetApiSecret("CasesClientId"));
+		client.ClientSecret = ClientSecret.Parse(builder.Configuration.GetApiSecret("CasesClientSecret"));
+		client.Scope = Scope.Parse("cases");
+	});
+
+builder.Services.AddHttpClient<CasesManageClient>(http => http.BaseAddress = new Uri(builder.Configuration.TryGetEndpoint("Cases")!))
+	.AddClientCredentialsTokenHandler(ClientCredentialsClientName.Parse("cases"));
+```
+
+Fail closed at startup if the authority, endpoint, client ID, secret or scope is missing.
+
+## Boundary
+
+- Cases owns case data, drafts, attachments, checkpoints, workflow state, comments, timeline, access rules and case types. Do not copy any of these into application tables; keep only the `caseId` and `referenceNumber` as references.
+- Business decisions belong to the workflow and its approved actions. Do not reimplement approval, assignment or checkpoint logic in your own module.
+- Cases authorization happens on the server. Hiding buttons in the UI is never enough on its own.
 
 ## Do not copy
 
-From any reference project: case types, checkpoint codes, workflow JSON, timers, role names, claims, scopes, client IDs, route taxonomy, customer journeys, notifications, callback semantics, cancellation behaviour, legal or product copy, access-rule defaults; generated API contracts as public contracts; SQL scripts, provider database names, registry and pipeline values, endpoint URLs, client secrets, certificate guidance, runbook values; any workflow-driven regulated decision behaviour.
+Do not copy any of the following from a reference project or from the specs:
+- case type codes, schemas or layouts
+- checkpoint codes
+- access-rule defaults, role names, group IDs or lookup names
+- client IDs, secrets or scopes beyond `cases`
+- authority and endpoint URLs
+- workflow behaviour
