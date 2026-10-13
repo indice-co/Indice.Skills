@@ -12,13 +12,15 @@ description: >
 
 Server-authoritative, least-privilege, fail-closed. Security lives in the backend; the UI is never trusted.
 
+The baseline security rules (server-side authorization, tenant enforcement, untrusted client values, least privilege, secrets, connection strings, development shortcuts) live in the Security rules of `engineering-rules.instructions.md` and are not repeated here. This skill adds the detail and the ASP.NET Core patterns for applying them.
+
 ## Principles
 
 Deny by default. Enforce authorization server-side. Apply least privilege. Scope data access by tenant. Minimize data collection and exposure. Audit regulated and security-relevant actions. Fail closed when configuration is missing or invalid. Never trade security, auditability, or privacy for delivery speed.
 
 ## Authorization
 
-Route guards, hidden menus, and disabled buttons are UX only. Authorization is always server-side, using Indice IAM scopes, roles, policies, and claims through approved patterns.
+Authorization uses Indice IAM scopes, roles, policies, and claims through approved patterns. Users authenticate through Indice IAM with OAuth 2.0 authorization code flow and PKCE; APIs accept only IAM-issued bearer tokens and validate issuer, audience, and scope.
 
 IAM proves who or what the caller is and issues validated identity context: authentication, MFA, sessions, OIDC/OAuth2 clients, API resources and scopes, token issuance and signing, provider configuration, sign-in and identity activity logs. The application decides what product actions the caller may perform: product permissions, tenant access, eligibility, KYC/AML, limit gates, and regulated action authorization. Never implement IAM primitives inside an API or business module (see the `indice-iam` skill).
 
@@ -30,14 +32,11 @@ IAM proves who or what the caller is and issues validated identity context: auth
 
 ## Tenant isolation
 
-Every resource access enforces the caller's permitted tenant scope.
-
-* A user in one tenant cannot read or modify another tenant's data.
-* Changed or materially exposed boundaries get focused automated evidence where feasible (see the `dotnet-testing` skill). UI filters never enforce scope.
+Every resource access enforces the caller's permitted tenant scope; a user in one tenant cannot read or modify another tenant's data. Changed or materially exposed boundaries get focused automated evidence where feasible (see the `dotnet-testing` skill).
 
 ## Secrets
 
-Never in source code, test data, seed data, logs, screenshots, documentation, pull requests, or committed configuration. Use user-secrets or approved local storage in development; key vault or managed secret storage in production; managed identity where available; centralized configuration with access controls. The token-signing certificate stays in its environment and is never copied into a repository or shared through chat, email, or tickets.
+Follow the secret rules in the engineering rules. In addition: use managed identity where available, and keep the token-signing certificate in its environment; never copy it into a repository or share it through chat, email, or tickets.
 
 ## PII and sensitive data
 
@@ -49,7 +48,7 @@ Stay out of raw card-data handling: never touch, store, log, transmit, inspect, 
 
 ## Input and web safety
 
-Validate all input server-side. Angular's built-in XSS protection is not a substitute for server-side authorization, validation, encoding, and output control.
+Validate all input server-side. Client-side validation and framework XSS protection never replace it.
 
 * Validate request DTOs; encode output where appropriate.
 * Allow-lists for filters, sorts, states, and enum-like inputs. Never concatenate SQL, build dynamic SQL from user input, or bind arbitrary client field names into EF queries.
@@ -85,10 +84,24 @@ Operators can affect regulated and financial workflows, so: explicit permissions
 
 Central package management with pinned versions; dependency and secret scanning in CI; no unapproved packages; a recorded justification for new dependencies; transitive-dependency review for security-sensitive packages. Never disable analyzers or warnings to make a build pass.
 
+## ASP.NET Core patterns
+
+Apply the rules above with these patterns, following the shape already used in the module:
+
+* Deny by default: set `AuthorizationOptions.FallbackPolicy` to require an authenticated user; mark anonymous endpoints explicitly with `[AllowAnonymous]` / `AllowAnonymous()` and justify each one.
+* Use named policies with scope and permission requirements on every endpoint (`[Authorize(Policy = ...)]` / `RequireAuthorization(...)`), not role-name checks scattered in handlers.
+* Check ownership and tenant scope with resource-based authorization (`IAuthorizationService.AuthorizeAsync(user, resource, requirement)`) before acting on a loaded resource.
+* Scope tenant data with EF Core global query filters. Every `IgnoreQueryFilters()` call needs a stated reason and review.
+* Use LINQ or `FromSql` / `FromSqlInterpolated` with parameters. Never pass user input to `FromSqlRaw` or `ExecuteSqlRaw` by concatenation.
+* Rate-limit sensitive endpoints with `AddRateLimiter` and named policies (`RequireRateLimiting(...)`).
+* Return `ProblemDetails` without exception details outside development; never return `exception.ToString()` or stack traces.
+* Validate request DTOs at the endpoint boundary before handlers run.
+* Enable NuGet audit (`NuGetAudit`) and fail CI on known vulnerable packages (`dotnet list package --vulnerable --include-transitive`).
+
 ## Checklist
 
 * Server-side authorization and least privilege; ownership and tenant checks; direct-object-reference rejected; UI controls treated as UX only.
-* IAM handles authentication, MFA, and sessions; the application handles product permissions and regulated gates.
+* IAM handles authentication (authorization code with PKCE), MFA, and sessions; the application handles product permissions and regulated gates.
 * No secrets anywhere in the repository, logs, docs, tests, screenshots, or PRs; no unnecessary PII or evidence logged.
 * Raw card data never handled; webhook signatures verified; replay protection where supported.
 * Inputs validated, outputs encoded, no dynamic SQL from user input.
