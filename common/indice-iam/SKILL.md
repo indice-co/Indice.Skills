@@ -30,7 +30,7 @@ A dedicated identity host project runs the product instance. Application modules
 4. If Indice owns the capability, compose or configure it in the identity host.
 5. If no Indice capability is proven, document the gap and fail closed. Do not invent an application-owned substitute.
 
-Surface names in this skill were last checked against `Indice.Features.Identity.*` 8.49.1. Re-verify against the installed version and record the reviewed version before relying on changed behaviour.
+Surface names in this skill were last checked against `Indice.Features.Identity.*` 8.57.0 XML docs and assemblies. Re-verify against the installed version and record the reviewed version before relying on changed behaviour. Product decks and template READMEs are leads, not sources of truth; where they disagree with the package (for example `LatestTermsReleaseDate`, `urn:indice:totp`, `BlockLogin`, or `MfaPolicy` values `Encouraged`/`Prohibited`), the package wins.
 
 ## Ownership boundary
 
@@ -76,14 +76,21 @@ Before implementing any IAM behaviour, check whether Indice already owns it.
 | FIDO2 / WebAuthn MFA | `Fido2AuthenticationMethod` where the package version confirms support |
 | MFA method abstraction | `IAuthenticationMethodProvider`, `AuthenticationMethodProviderInMemory` |
 | TOTP primitives | `TotpOptions`, `TotpOptionsBase`, `TotpServiceFactory` |
-| Custom OAuth grants | Extension-grant validators for TOTP, device authentication, delegation, and OTP-authenticate |
-| Two-factor user policy | `User.TwoFactorPolicy`, `IExtendedUserStore.TwoFactorPolicy` |
+| Custom OAuth grants | Extension-grant validators for TOTP, device authentication, delegation, guest, MFA, and OTP-authenticate (`CustomGrantTypes`, `TotpConstants.GrantType`, `OtpAuthenticateExtensionGrantValidator`) |
+| Two-factor user policy | `User.TwoFactorPolicy`, `IExtendedUserStore.TwoFactorPolicy`; `MfaPolicy` values `Default`, `Optional`, `Enforced` |
+| Sessions | `ExtendedIdentityServerOptions.EnableServerSideSessions`, `EnforceSingleActiveSession` |
+| Device limits and trust delay | `ExtendedUserManager.MaxAllowedRegisteredDevices`, `TrustActivationDelay` |
+| Action attempt limiting | `AddActionRateLimiter(...)`, `ActionRateLimiterOptions` (`Enabled`, `MaxAttempts`, `Window`) |
+| Password and registration validators | `AddNonCommonPasswordValidator()`, `AddEmailDomainBlacklistValidator(...)` |
+| Impossible travel | `IImpossibleTravelDetector`, `ImpossibleTravelFlowType` (`PromptMfa`, `DenyLogin`) via the sign-in guard |
+| Operator-to-client assignment | `ClientUser` (`ExtendedConfigurationDbContext.ClientUsers`) |
+| IAM authorization policies | `BasicPolicyNames` / `IdentityEndpoints.Policies` (for example `BeAdmin`, `BeUsersReader`) |
 | Post-login validation pipeline | Identity validation activities: terms acceptance, MFA onboarding, email/phone verification, password change |
 | MFA UI | `/Mfa`, `/MfaOnboarding`, `/MfaOnboardingAddPhone`, `/MfaOnboardingVerifyPhone`, `/MfaOnboardingAddEmail`, `/MfaOnboardingVerifyEmail` |
 | Sign-in evidence | `Indice.Features.Identity.SignInLogs`: event sink, enrichers, filters, retention cleanup, activity-log integration |
 | Admin and configuration UI | `Indice.Features.Identity.AdminUI` |
 
-Strongest extension points: `IExtensionGrantValidator`, `IIdentityValidationActivity`, `IEventHandler<TEvent>`, sign-in-log enrichers and filters, Razor class library page overrides, and static asset overrides.
+Strongest extension points: `IExtensionGrantValidator`, `IIdentityValidationActivity`, `IEventHandler<TEvent>`, `ISignInLogEntryEnricher`, Razor class library page overrides, and static asset overrides. Do not assume a sign-in-log filter interface exists; 8.57.0 exposes enrichers only.
 
 ## Host composition
 
@@ -98,7 +105,7 @@ Template composition, as an ordering reference:
 3. Keep application-specific services in a thin `AddApplicationServices()` extension after product composition.
 4. Runtime order: forwarded headers; exception/status pages; production redirect/HSTS or development provider-store setup; static files; cookie policy; routing; `UseRateLimiter`; request localization; response caching; authentication; authorization; IdentityServer; CORS; output cache; Admin UI; OpenAPI; `MapIdentityServer`; avatars; Razor Pages; MFA endpoints and hub; health checks.
 
-Keep template defaults enabled where they are normal IAM host composition: Admin UI, Identity UI, extended endpoints, device and TOTP endpoints, sign-in logs, data protection and file services, OpenAPI, cache, SignalR, health checks, provider-owned store setup. Layer only your clients, resources, scopes, claims, policy checks, and configuration validation on top. Block resource-owner-password grants, seeded all-access users, copied secrets, copied legal copy, provider credentials, sample connection strings, and unconfigured provider stores.
+Block resource-owner-password grants (including the template's `needs_mfa` password-grant path), seeded all-access users, copied secrets, copied legal copy, provider credentials, sample connection strings, and unconfigured provider stores.
 
 `AddWebServiceDefaults()` and `MapHealthCheckDefaults()` provide package-owned health, telemetry, and HTTP-client defaults. Do not call `AddDefaultHealthChecks()` separately when `AddWebServiceDefaults()` is present. Do not call `AddMinimalApiDefaults()` in the identity host; its JWT, CORS, and ProblemDetails behaviour belongs to API hosts.
 
@@ -117,7 +124,8 @@ Rules:
 * Do not register a broad catch-all API scope that satisfies every policy by itself. APIs validate audience and the required scope before endpoint execution, then apply product permissions.
 * Expose only approved, minimal claims. Review claim exposure for PII, scoping, and least privilege.
 * API resource secrets, redirect URIs, origins, issuer, and hostnames come from configuration or secret stores. Production fails closed on missing, placeholder, malformed, or unregistered values. No wildcard callbacks, shared credentials, or public-client conversions.
-* SPA clients use authorization code with PKCE (for example via `oidc-client-ts`) and attach bearer tokens only to the configured API root. Client-side guards are UX only.
+* Interactive clients use OAuth 2.0 authorization code with PKCE through Indice IAM, per the security rules in `engineering-rules.instructions.md`. SPA clients (for example via `oidc-client-ts`) attach bearer tokens only to the configured API root. Client-side guards are UX only.
+* Delegation, device-authentication, guest, MFA, OTP-authenticate, and device-code grants are each enabled per client only with an approved design covering actor, scope, audit, and abuse limits.
 
 For every client record: purpose and owning surface; human or service actor; grant type and token type; allowed scopes and identity resources; redirect, post-logout, and CORS origins; secret storage and rotation; offline access and refresh-token behaviour; access-token lifetime and reference vs JWT; emitted claims; environment availability. No UI, worker, host, or Admin UI surface is ready until this contract is approved.
 
@@ -125,7 +133,9 @@ For every client record: purpose and owning surface; human or service actor; gra
 
 IAM configuration includes: identity, configuration, operational, sign-in-log, and activity-log database connections and retention; external providers; data protection storage; SignalR backplane and push settings; email/SMS delivery; MFA, TOTP, WebAuthn, trusted-browser, and device options; password, lockout, terms reacceptance, and validation-pipeline settings; runtime database settings; reCAPTCHA keys; signing credentials; forwarded headers; OpenAPI and Admin UI authority values; CSP and rate-limiter settings.
 
-All of it comes from configuration providers, user secrets, environment variables, or approved secret stores. Never check in fallback LocalDB or provider settings, connection strings, secret values, signing certificate files, or provider credentials.
+All of it comes from configuration providers, user secrets, environment variables, or approved secret stores. Never check in fallback LocalDB or provider settings, connection strings, secret values, signing certificate files, or provider credentials. Signing PFX files and passwords come only from an approved secret store.
+
+Runtime settings written through `AddDatabaseSettingEndpoints()` are IAM configuration changes: restrict them to IAM operator scopes, keep their activity-log evidence, and keep any development-only bulk-load of `appsettings.json` unreachable outside development.
 
 ## External providers
 
@@ -148,8 +158,12 @@ Registration and onboarding journeys are product behaviour, not IAM plumbing. Re
 MFA is composed setup, not a page: identity options and user two-factor policy; device and trusted-browser options; MFA and device endpoints; authentication methods; TOTP delivery and validation; SignalR/push or OTP delivery; rate limiting; localized resources; sign-in and activity evidence. Email, SMS, push, Viber, WebAuthn, and trusted devices are security-sensitive product choices: fail closed unless explicitly approved.
 
 * Rate limiting: the template enables `UseRateLimiter()` with `IdentityServer:RateLimiter` rules per endpoint (login, forgot-password, register, TOTP, username-exists, password validation, account updates, confirmations). Carry the template-shaped rules forward with approved values, or leave the feature clearly disabled. Never a no-op policy set.
-* reCAPTCHA: v3 keys with optional v2 fallback; CSP must allow `https://www.google.com` and `https://www.gstatic.com` in connect, script, and frame directives. Do not enable without approved keys, CSP, accessibility handling, and test evidence.
-* Terms: `IdentityOptions:SignIn:RequirePostSigninAcceptedTerms`, `TermsLastModifiedDate`, `RequiresTermsAcceptanceActivity`, and markdown under `wwwroot/legal/`. The sample legal markdown is placeholder content.
+* reCAPTCHA: v3 keys with optional v2 fallback; CSP must allow `https://www.google.com` and `https://www.gstatic.com` in connect, script, and frame directives. Validation sends the user's IP address to Google, so enabling it also needs privacy approval. Do not enable without approved keys, score threshold, CSP, accessibility handling, and test evidence.
+* Terms: `IdentityOptions:SignIn:RequirePostSigninAcceptedTerms`, `TermsLastModifiedDate`, `RequiresTermsAcceptanceActivity`, and markdown under `wwwroot/legal/`. The sample legal markdown is placeholder content; real terms are legal copy and fall under the gated sensitive zones.
+* MFA policy: the global policy and per-user `TwoFactorPolicy` are separate levels. Downgrade of authentication method, trusted-browser remember duration and expiration type, and MFA on expired password with a trusted browser are approved policy values, not template defaults.
+* Devices: `TrustActivationDelay` and `MaxAllowedRegisteredDevices` are approved values; do not shorten the trust delay or remove the cap without approval.
+* Impossible travel: choose `PromptMfa` or `DenyLogin` as an approved decision. Do not build a separate geo or velocity check.
+* Validation pipeline: custom `IIdentityValidationActivity` steps that implement regulated gates (for example KYC) follow the gated sensitive zone rules.
 * Other hardening areas (password validators, lockout, trusted browser and device policy, CSP) must each be explicitly approved and configured.
 
 ## Step-up for sensitive actions
@@ -171,6 +185,8 @@ Evidence must prove native TOTP exchange wiring, resulting `amr=totp` and usable
 IAM-owned events use Indice evidence: sign-in logs (auth-attempt shaped), activity logs (entity-mutation shaped), provider-owned lifecycle evidence, and IAM store records. Keep that distinction. Application audit is for application-owned product decisions only; do not treat sign-in logs as regulated business audit evidence unless an approved design defines the relationship.
 
 Never log or expose raw tokens, OTPs, TOTP values, recovery codes, passwords, provider payloads, secrets, signing material, or unnecessary PII.
+
+Keep `SignInLogOptions.AnonymizePersonalData` enabled unless a privacy-approved design says otherwise. `LogCleanupOptions.RetentionDays` is an approved retention value; do not add a separate cleanup job.
 
 ## Database and deployment boundary
 
