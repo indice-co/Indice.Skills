@@ -1,17 +1,19 @@
 ---
-name: <short-kebab-case-name>          # e.g. billing-domain
+# Must match the folder name. Prefix with the product to avoid clashing with installed Indice skills.
+name: <product>-<area>
 description: >
-  Use when working on <product/area>. Covers <domain terms, business rules,
-  key integrations>. The agent should read this before implementing features in
-  this area, and prefer the referenced Indice libraries over new code.
-applyTo:                                # optional: auto-apply as instructions
-  - "src/Billing/**"
+  Use when working on <product/area>: <domain terms, business rules, key
+  integrations>. Read before implementing features in this area. Builds on the
+  Indice skills (<indice-skill-a>, <indice-skill-b>) and does not repeat them.
 ---
 
 # <Skill title>
 
 ## Purpose
 One paragraph: what this skill covers and when to use it.
+
+## Builds on
+- `<indice-skill>`: what it already covers, so this skill does not restate it.
 
 ## Domain glossary
 - **Term** — definition and how it is used.
