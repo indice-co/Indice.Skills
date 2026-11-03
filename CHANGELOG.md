@@ -13,3 +13,7 @@ with SemVer; consuming repos pin to a tag or commit.
   skill, which it treats as a baseline and overrides in a documented set of cases.
 - Added `evals/indice-web-api/`: three tasks and a rubric for measuring whether the
   skill changes agent output.
+- Added ten Kotlin Multiplatform skills under `common/indice-kmp/`: source-set placement,
+  platform boundaries, shared API review, iOS interop, Compose Multiplatform features,
+  test matrix, build triage, toolchain upgrades, KMP library selection, and Android
+  emulator QA.

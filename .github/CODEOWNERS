@@ -3,5 +3,6 @@
 /common/angular-*/       @indice-co/TODO-angular-owners
 /common/azure-*/         @indice-co/TODO-azure-owners
 /common/indice-*/        @indice-co/TODO-library-owners
+/common/indice-kmp/      @indice-co/TODO-kmp-owners
 /instructions/           @indice-co/TODO-dotnet-owners @indice-co/TODO-angular-owners
 /templates/              @indice-co/TODO-library-owners
