@@ -29,7 +29,7 @@ Skills follow the open [Agent Skills specification](https://agentskills.io): a f
 
 | Folder | Contents |
 | --- | --- |
-| `common/` | The Indice skills (one folder per skill) and the always-on engineering rules (`engineering-rules*.instructions.md`) |
+| `common/` | The Indice skills (one folder per skill; Kotlin Multiplatform skills grouped under `common/indice-kmp/`) and the always-on engineering rules (`engineering-rules*.instructions.md`) |
 | `instructions/` | Always-on language instructions for .NET and Angular |
 | `prompts/` | Reusable `*.prompt.md` files |
 | `templates/` | Templates for project-specific skills (see [section 3](#3-project-specific-skills)) |
@@ -64,6 +64,21 @@ Skills follow the open [Agent Skills specification](https://agentskills.io): a f
 | `angular-conventions` | Writing or reviewing Angular code: components, folder structure, state, RxJS, change detection, styling |
 | `angular-architecture` | Creating or restructuring an Angular app and its ASP.NET Core host: routing, runtime config, OIDC, API clients |
 | `angular-ux` | Designing or implementing Angular screens with PrimeNG |
+
+**Kotlin Multiplatform** (in `common/indice-kmp/`)
+
+| Skill | Use when |
+| --- | --- |
+| `kmp-source-set-placement` | Choosing the source set and dependency scope for new or moved code, resources, and tests |
+| `kmp-platform-boundary` | Exposing an Android or iOS platform service (permissions, storage, sensors, native SDKs) through a shared API |
+| `kmp-shared-api-review` | Reviewing public shared APIs for platform leakage, coroutine ownership, error mapping, and Swift usability |
+| `kmp-ios-interop` | Kotlin-to-Swift interop, SwiftUI/UIKit embedding, coroutine and Flow bridging, framework packaging |
+| `compose-multiplatform-feature` | Building or reviewing screens shared through Compose Multiplatform |
+| `kmp-test-matrix` | Adding and running tests across common and platform source sets, and reporting targets not run |
+| `kmp-build-triage` | Gradle sync, compilation, Kotlin/Native linking, or Xcode integration fails |
+| `kmp-toolchain-upgrade` | An explicit upgrade of Kotlin, Gradle, AGP, Compose Multiplatform, KSP, and related tooling |
+| `kotlin-multiplatform-libraries-expert` | Finding, comparing, or adding KMP libraries with verified coordinates, versions, and target support |
+| `android-emulator-qa` | Verifying an Android flow on an emulator with adb, UI-tree inspection, screenshots, and Logcat |
 
 **Cross-cutting**
 
@@ -203,3 +218,4 @@ Install selectively. Every installed skill's description sits in the agent's con
 | .NET API or feature library | `dotnet/skills` (selected), `duende-skills` if it hosts IAM | `indice-packages`, `dotnet-conventions`, `dotnet-web-api`, `dotnet-testing`, `security-owasp`, plus the general and backend engineering rules |
 | App that uses Indice Messaging or Cases | | `indice-messaging`, `indice-cases` |
 | Angular app | `angular/skills`, PrimeNG plugin | `angular-conventions`, `angular-architecture`, `angular-ux`, plus the general and frontend engineering rules |
+| Kotlin Multiplatform app | | The `common/indice-kmp/` skills the repo needs, plus the general engineering rules |
