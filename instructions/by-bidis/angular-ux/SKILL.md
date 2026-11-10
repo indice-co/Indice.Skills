@@ -1,23 +1,23 @@
 ---
 name: angular-ux
 description: >
-  Use when designing or implementing Angular screens with PrimeNG: app posture
+  Use when designing or implementing Angular screens with daisyUI (Tailwind CSS): app posture
   (customer-facing vs back-office), folder and feature structure, when to use a
-  route vs dialog vs drawer vs inline edit, PrimeNG component selection, forms,
+  route vs dialog vs drawer vs inline edit, daisyUI component selection, forms,
   copy, screen states, tables, status, accessibility, and the UI review checklist.
 ---
 
-# Angular + PrimeNG UX workflow
+# Angular + daisyUI UX workflow
 
 Turns approved requirements into consistent, modern, high-quality UI without inventing product behaviour, regulated logic, or one-off interaction patterns.
 
-This skill assumes PrimeNG as the component foundation. If the project uses `Indice.Angular` or another library, apply the same rules and map components accordingly.
+This skill assumes daisyUI (on Tailwind CSS) as the component foundation. daisyUI is CSS-only: it provides class-based styling and themes, not Angular behaviour. Interactive behaviour (overlays, focus trapping, keyboard handling, positioning) comes from Angular and the Angular CDK (`@angular/cdk/a11y`, `@angular/cdk/overlay`, `@angular/cdk/dialog`) inside project wrappers. Icons come from Lucide (`lucide-angular`). If the project uses `Indice.Angular` or another library, apply the same rules and map components accordingly.
 
 ## Core rule
 
 The UI must feel premium, modern, clear, fast, trustworthy, consistent, and low-friction. The user should never need to think twice about where they are, what something means, what they can do, what happens next, whether an action succeeded, why an action is blocked, or how to recover from an error.
 
-PrimeNG gives the building blocks. The product owns the experience. Do not ship a default PrimeNG-looking app.
+daisyUI gives the building blocks. The product owns the experience. Do not ship a default daisyUI-looking app: define a project theme (daisyUI theme / CSS variables for colours, radius, and spacing) and use semantic colour names (`primary`, `error`, `warning`, ...), never hardcoded Tailwind palette colours for meaning.
 
 ## Non-negotiables
 
@@ -26,7 +26,7 @@ PrimeNG gives the building blocks. The product owns the experience. Do not ship 
 * Do not duplicate regulated decision logic in the browser. Financial, eligibility, fee, tax, payment, KYC, or AML truth is never calculated client-side.
 * Do not hardcode legal, payment, tax, or regulated error copy. It comes from server-provided, configurable content.
 * Do not build unbounded client-side lists.
-* Do not use raw PrimeNG where a project wrapper exists. Do not bypass generated API clients.
+* Do not use raw daisyUI classes where a project wrapper exists. Do not bypass generated API clients.
 * Disabled buttons, hidden menus, and route guards are not security. The server authorizes.
 * No dark patterns: urgency manipulation, shame, deceptive scarcity, or pressure loops.
 * Clarity, trust, and accessibility outrank visual flash.
@@ -68,13 +68,23 @@ apps/<app>/src/app/
 
 Shared UI must not depend on features. Do not put API calls inside small visual components. A component must not manage layout, fetch data, run commands, map errors, and decide business rules all at once.
 
-## Wrapping PrimeNG
+## Wrapping daisyUI
 
-Use raw PrimeNG only for simple, low-risk display elements. Create project wrappers for buttons, form fields, date pickers, dialogs, drawers, tables, filters, paginators, confirmations, toasts, status tags, empty/error/loading states, money and progress display, and action menus.
+Use raw daisyUI classes only for simple, low-risk display elements (badges, dividers, cards for layout). Create project wrappers for buttons, form fields, date pickers, dialogs, drawers, tables, filters, paginators, confirmations, toasts, status tags, empty/error/loading states, money and progress display, and action menus. Because daisyUI ships no behaviour, wrappers must also own ARIA roles and attributes, focus management, Escape/outside-click handling, and keyboard navigation (prefer Angular CDK primitives over hand-rolled logic).
 
 Wrappers standardize spacing, density, labels, validation display, error handling, icons, sizes, severity mapping, accessibility attributes, loading, disabled/blocked behaviour, and responsive behaviour.
 
 Before adding a component: Is there a wrapper? Use it. Is there an existing pattern for this interaction? Reuse it. Is it a new interaction class? Document the pattern before using it broadly. Does it hide important information or add cognitive load? Redesign. Does it touch regulated or financial truth? Server-confirmed values only. Is it keyboard and screen-reader accessible? Required.
+
+## Icons
+
+Lucide (`lucide-angular`) is the only icon library. Do not add other icon sets (PrimeIcons, Font Awesome, Material Icons) or inline ad-hoc SVGs for icons Lucide already provides.
+
+* Use standalone imports and import only the icons you use (for example `<lucide-icon [img]="Trash2" />` or `<svg lucideTrash2></svg>`, depending on the `lucide-angular` version in the project); never register the full icon set, as it breaks tree-shaking.
+* Use icons through the project icon wrapper where one exists, so size, stroke width, and colour stay consistent. Use the same sizes and stroke width everywhere (for example 16px in dense back-office tables and 20px by default, with the default stroke width of 2).
+* Colour icons with `currentColor` and daisyUI semantic text classes (`text-error`, `text-success`), not hardcoded colours.
+* Same meaning = same icon across the product (for example `Trash2` for delete and `Pencil` for edit). Keep the mapping in the wrapper or a shared constant.
+Never use an icon as the only cue for status or severity.
 
 ## Route vs dialog vs drawer vs inline
 
@@ -122,21 +132,21 @@ Avoid colour overload, low contrast, decorative shadows everywhere, competing ac
 
 Motion: subtle, never delays task completion, respects reduced-motion preferences, no infinite animation outside loading. Use for page transitions, overlay entrance, skeletons, hover/focus, progress, success. Avoid for critical warnings, dense tables, dramatically changing financial numbers, and regulated decision moments.
 
-## PrimeNG component catalogue
+## daisyUI component catalogue
 
-Use the component that matches the job. This is not permission to use every component everywhere.
+Use the component that matches the job. This is not permission to use every component everywhere. Names below are daisyUI class names; behaviour noted as "CDK" must be supplied by the wrapper.
 
 ### Buttons and commands
 
 | Component | Use for | Avoid when |
 | --- | --- | --- |
-| Button | Primary, secondary, tertiary actions | Too many competing buttons |
-| SplitButton | Primary action plus closely related alternatives | Alternatives are unrelated or risky |
-| SpeedDial | Floating quick actions, mostly mobile | Back-office tables or regulated actions |
-| ConfirmDialog | Risky, destructive, irreversible confirmation | Lightweight reversible actions |
-| ConfirmPopup | Small contextual confirmation | High-risk or regulated actions |
-| Menu / TieredMenu | Grouped secondary actions | Primary workflow navigation |
-| ContextMenu | Expert back-office shortcuts | Main discoverable actions |
+| `btn` (`btn-primary`, `btn-outline`, `btn-ghost`, `btn-link`) | Primary, secondary, tertiary actions | Too many competing buttons |
+| `join` + `btn` + `dropdown` | Split button: primary action plus closely related alternatives | Alternatives are unrelated or risky |
+| `fab` / `dock` | Floating quick actions or bottom nav, mostly mobile | Back-office tables or regulated actions |
+| `modal` confirm wrapper (CDK Dialog) | Risky, destructive, irreversible confirmation | Lightweight reversible actions |
+| `dropdown` confirm (CDK Overlay) | Small contextual confirmation | High-risk or regulated actions |
+| `dropdown` + `menu` | Grouped secondary actions | Primary workflow navigation |
+| CDK Menu with `menu` styling | Expert back-office context shortcuts | Main discoverable actions |
 
 One primary action per section. Secondary actions visible but quieter. Destructive actions are never primary by colour alone. Risky actions need confirmation with consequence. Disabled buttons explain why where useful.
 
@@ -144,25 +154,25 @@ One primary action per section. Secondary actions visible but quieter. Destructi
 
 | Component | Use for | Avoid when |
 | --- | --- | --- |
-| Card | Summary panels, entity cards, metric cards | Dense grids where a table is better |
-| Panel | Contained, optionally collapsible sections | Primary page structure everywhere |
-| Accordion | Progressive disclosure of secondary content | Required content |
-| Tabs | Peer sections on the same object | Sequential workflows |
-| Fieldset | Grouped form sections | Where a card or section is cleaner |
-| Splitter | Resizable operational workspaces | Customer journeys or simple forms |
-| Toolbar | Page or list action bars | Generic content layout |
-| Stepper / Steps | Multi-step process, must show where the user is | Non-linear sections |
+| `card` / `stats` | Summary panels, entity cards, metric cards | Dense grids where a table is better |
+| `collapse` | Contained, optionally collapsible sections | Primary page structure everywhere |
+| `collapse` group (`join join-vertical`) | Accordion: progressive disclosure of secondary content | Required content |
+| `tabs` (`tabs-border`, `tabs-box`) | Peer sections on the same object; wire `role="tablist"` and keyboard nav | Sequential workflows |
+| `fieldset` + `fieldset-legend` | Grouped form sections | Where a card or section is cleaner |
+| Custom wrapper (no daisyUI equivalent) | Resizable operational workspaces | Customer journeys or simple forms |
+| `navbar` / flex toolbar wrapper | Page or list action bars | Generic content layout |
+| `steps` | Multi-step process, must show where the user is | Non-linear sections |
 
 ### Overlays
 
 | Component | Use for | Avoid when |
 | --- | --- | --- |
-| Dialog | Focused modal task | Complex primary flow |
-| Drawer | Contextual side panel | Full-page workflow |
-| Popover / OverlayPanel | Small contextual content or action | Critical information, long forms |
-| Tooltip | Short hints | Required instructions |
-| Toast | Temporary confirmation or error | Only evidence of important state |
-| Message / InlineMessage | Persistent inline feedback | Global temporary notices |
+| `modal` (CDK Dialog or native `<dialog>`) | Focused modal task | Complex primary flow |
+| `drawer` (CDK focus trap) | Contextual side panel | Full-page workflow |
+| `dropdown` / popover (CDK Overlay) | Small contextual content or action | Critical information, long forms |
+| `tooltip` | Short hints; CSS-only, so add `aria-describedby` and keyboard-focus support | Required instructions |
+| `toast` + `alert` (toast service wrapper, `aria-live`) | Temporary confirmation or error | Only evidence of important state |
+| `alert` (`alert-info`, `alert-warning`, `alert-error`, `alert-success`) | Persistent inline feedback | Global temporary notices |
 
 Required guidance is visible inline, never tooltip-only. Toasts disappear; never rely on them for audit-level or high-risk confirmation.
 
@@ -170,43 +180,43 @@ Required guidance is visible inline, never tooltip-only. Toasts disappear; never
 
 | Component | Use for | Notes |
 | --- | --- | --- |
-| InputText / Textarea | Text | Always a visible label; character guidance where needed |
-| Password / InputOtp | Credentials, OTP | Follow the IAM pattern; do not invent auth flows |
-| InputNumber | Simple numeric UI | Not money truth |
-| InputMask | Structured values | Only when the format is stable |
-| DatePicker | Dates | Server-approved date rules |
-| Select / MultiSelect / AutoComplete | Single, multiple, or searched choice | Server-provided options where configurable; search for large sets |
-| Checkbox / RadioButton / SelectButton | Boolean or small exclusive sets | Radio beats dropdown for 2 to 5 options; label states consequence |
-| ToggleSwitch | Immediate binary setting | Confirm high-risk changes |
-| Slider / Rating / ColorPicker | Approximate or config-tool values | Never for precise money or regulatory values |
-| Chips | Token input | Validate tokens server-side |
+| `input` / `textarea` (+ `label`, `validator`) | Text | Always a visible label; character guidance where needed |
+| `input type=password` / OTP wrapper | Credentials, OTP | Follow the IAM pattern; do not invent auth flows |
+| `input type=number` wrapper | Simple numeric UI | Not money truth |
+| Masked input wrapper | Structured values | Only when the format is stable |
+| Date picker wrapper (native `input type=date` or `calendar` styling) | Dates | Server-approved date rules |
+| `select` / combobox wrapper (CDK Overlay + `menu`) | Single, multiple, or searched choice | Server-provided options where configurable; search for large sets |
+| `checkbox` / `radio` / `join` + `btn` / `filter` | Boolean or small exclusive sets | Radio beats dropdown for 2 to 5 options; label states consequence |
+| `toggle` | Immediate binary setting | Confirm high-risk changes |
+| `range` / `rating` | Approximate or config-tool values | Never for precise money or regulatory values |
+| Token input wrapper with `badge` | Token input | Validate tokens server-side |
 
 ### Data display
 
 | Component | Use for | Avoid when |
 | --- | --- | --- |
-| DataTable | Operational lists and back-office grids, server-side | Cards are more scannable |
-| TreeTable / Tree | Hierarchical data or navigation | Flat data |
-| DataView | Customer-facing card/list switch | Dense operational data |
-| OrderList / PickList | Reordering, moving between sets | Large sets without search |
-| Timeline | History, audit, status trail | Current editable data |
-| Carousel / Galleria / Image | Media browsing and previews, with alt text and fallbacks | Required content, sensitive documents without access control |
-| Tag / Badge | Status, severity, counts | Long text; badge as only status cue |
-| Skeleton / ProgressSpinner | Page loading / small blocking waits | Spinner for page content |
-| ProgressBar / MeterGroup | Progress toward a target | Values not server-confirmed |
-| Chart | Trends and KPIs | When a table is needed for evidence |
+| `table` (`table-zebra`, `table-pin-rows`) in a server-side table wrapper (sorting, filtering, paging owned by the wrapper) | Operational lists and back-office grids, server-side | Cards are more scannable |
+| `menu` nested / CDK Tree | Hierarchical data or navigation | Flat data |
+| `list` / `card` grid | Customer-facing card/list switch | Dense operational data |
+| CDK Drag and Drop with `list` | Reordering, moving between sets | Large sets without search |
+| `timeline` | History, audit, status trail | Current editable data |
+| `carousel` / `avatar` / `mask` | Media browsing and previews, with alt text and fallbacks | Required content, sensitive documents without access control |
+| `badge` / `status` / `indicator` | Status, severity, counts | Long text; badge as only status cue |
+| `skeleton` / `loading` | Page loading / small blocking waits | Spinner for page content |
+| `progress` / `radial-progress` | Progress toward a target | Values not server-confirmed |
+| Chart library (daisyUI has none) themed with daisyUI CSS variables | Trends and KPIs | When a table is needed for evidence |
 
 ### Navigation and utilities
 
 | Component | Use for | Avoid when |
 | --- | --- | --- |
-| Menubar / MegaMenu | Top-level app or portal navigation | Deep back-office navigation |
-| PanelMenu | Back-office side navigation | Customer-facing primary nav |
-| Breadcrumb | Location on deep detail pages | Very shallow flows |
-| TabMenu | Peer section switching | Sequential forms |
-| Paginator / VirtualScroller | Server-side paging; large read-only option sets | Client-side paging of server-sized data |
-| FocusTrap | Dialog and drawer accessibility | Skipping it on custom overlays |
-| Ripple / StyleClass / AnimateOnScroll | Polish, controlled style toggles, content pages | Critical workflows; use consistently or not at all |
+| `navbar` + `menu-horizontal` | Top-level app or portal navigation | Deep back-office navigation |
+| `drawer` + `menu` (with `collapse`/`details` submenus) | Back-office side navigation | Customer-facing primary nav |
+| `breadcrumbs` | Location on deep detail pages | Very shallow flows |
+| `tabs` with `routerLink` | Peer section switching | Sequential forms |
+| `join` + `btn` paginator wrapper / CDK Virtual Scroll | Server-side paging; large read-only option sets | Client-side paging of server-sized data |
+| CDK `cdkTrapFocus` | Dialog and drawer accessibility | Skipping it on custom overlays |
+| `swap` / Tailwind transitions and animations | Polish, controlled style toggles, content pages | Critical workflows; use consistently or not at all |
 
 Navigation labels use user language. Active state is visible. Back-office preserves context between list and detail.
 
@@ -336,7 +346,7 @@ If the answers are not in the approved requirement, record the UI decisions ther
 
 ## Final review checklist
 
-* Existing pattern reused; container choice justified; no raw PrimeNG accidentally creating a new pattern.
+* Existing pattern reused; container choice justified; no raw daisyUI classes accidentally creating a new pattern.
 * Reachable states exist: loading, error, success, and empty or forbidden where relevant.
 * Forms have visible labels, helper text where needed, no placeholder-as-label, server errors mapped to fields, ProblemDetails handled.
 * Actions use server-confirmed capabilities; server-side authorization remains the boundary; no regulated logic or client-side financial totals in the UI.
@@ -345,4 +355,4 @@ If the answers are not in the approved requirement, record the UI decisions ther
 * Critical journeys work by keyboard.
 * UI behaviour maps proportionately to verification.
 
-When unsure: prefer route over modal for important workflows, drawer over modal for back-office inspection, visible text over icon-only, server capabilities over client role checks, inline help over tooltips, existing wrapper over raw PrimeNG, clarity over novelty, calm trust over excitement in regulated moments, and stopping over guessing.
+When unsure: prefer route over modal for important workflows, drawer over modal for back-office inspection, visible text over icon-only, server capabilities over client role checks, inline help over tooltips, existing wrapper over raw daisyUI, clarity over novelty, calm trust over excitement in regulated moments, and stopping over guessing.

@@ -63,7 +63,7 @@ Skills follow the open [Agent Skills specification](https://agentskills.io): a f
 | --- | --- |
 | `angular-conventions` | Writing or reviewing Angular code: components, folder structure, state, RxJS, change detection, styling |
 | `angular-architecture` | Creating or restructuring an Angular app and its ASP.NET Core host: routing, runtime config, OIDC, API clients |
-| `angular-ux` | Designing or implementing Angular screens with PrimeNG |
+| `angular-ux` | Designing or implementing Angular screens with daisyUI (Tailwind CSS) and Lucide icons |
 
 **Cross-cutting**
 
@@ -193,7 +193,7 @@ Install selectively. Every installed skill's description sits in the agent's con
 | --- | --- | --- |
 | [angular/skills](https://github.com/angular/skills) | Official Angular team skills: `angular-developer` (components, signals, forms, DI, routing, SSR, accessibility, testing) and `angular-new-app` | `npx skills add angular/skills` |
 | [Angular CLI MCP Server](https://angular.dev/ai/mcp) | Lets the agent search Angular docs and best practices and run CLI tasks in the workspace | See the documentation |
-| [PrimeNG plugin and MCP Server](https://primeng.dev/mcp) | PrimeNG component docs, API metadata, and usage validation. Used together with `angular-ux` | `pnpm dlx @primeui/cli plugin install --tool copilot --library primeng` |
+| [daisyUI llms.txt](https://daisyui.com/llms.txt) | daisyUI component class names, themes, and usage rules for the agent. Used together with `angular-ux` | Add the URL to the agent context or instructions |
 
 ### Starter sets
 
@@ -202,4 +202,4 @@ Install selectively. Every installed skill's description sits in the agent's con
 | New service | | `indice-templates`, then the .NET row |
 | .NET API or feature library | `dotnet/skills` (selected), `duende-skills` if it hosts IAM | `indice-packages`, `dotnet-conventions`, `dotnet-web-api`, `dotnet-testing`, `security-owasp`, plus the general and backend engineering rules |
 | App that uses Indice Messaging or Cases | | `indice-messaging`, `indice-cases` |
-| Angular app | `angular/skills`, PrimeNG plugin | `angular-conventions`, `angular-architecture`, `angular-ux`, plus the general and frontend engineering rules |
+| Angular app | `angular/skills`, daisyUI llms.txt |
